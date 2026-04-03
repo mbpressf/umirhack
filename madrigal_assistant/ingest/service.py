@@ -13,7 +13,7 @@ from xml.etree import ElementTree
 from bs4 import BeautifulSoup
 
 from madrigal_assistant.models import IngestSourceStat, RawEvent, SourceDefinition
-from madrigal_assistant.text import first_sentence, shorten, stable_event_id, strip_html
+from madrigal_assistant.text import clean_public_text, first_sentence, looks_like_promotional_noise, shorten, stable_event_id, strip_html
 
 DEFAULT_HEADERS = {"User-Agent": "Mozilla/5.0 (Madrigal Regional Pulse)"}
 
@@ -220,8 +220,8 @@ class IngestionService:
             text_node = message.select_one(".tgme_widget_message_text")
             if not text_node:
                 continue
-            text = " ".join(text_node.stripped_strings)
-            if not text:
+            text = clean_public_text(" ".join(text_node.stripped_strings))
+            if not text or looks_like_promotional_noise(text):
                 continue
             post_id = message.get("data-post", "")
             date_node = message.select_one("time")
@@ -282,11 +282,13 @@ class IngestionService:
         items = payload.get("response", {}).get("items", [])
         events: list[RawEvent] = []
         for item in items:
-            text = self._extract_vk_post_text(item)
+            text = clean_public_text(self._extract_vk_post_text(item))
             if not text:
                 continue
             url = f"https://vk.com/wall{item.get('owner_id')}_{item.get('id')}"
             title = shorten(first_sentence(text), 100) or source.name
+            if looks_like_promotional_noise(text, title=title):
+                continue
             engagement = (item.get("views") or {}).get("count")
             if engagement is None:
                 engagement = sum((item.get(metric) or {}).get("count", 0) for metric in ("likes", "comments", "reposts"))

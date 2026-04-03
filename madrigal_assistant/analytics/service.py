@@ -46,6 +46,7 @@ SEVERITY_BY_SECTOR = {
 COMPLAINT_MARKERS = {"жалоб", "проблем", "очеред", "авар", "запах", "перебо", "срыв", "задерж", "отключ", "холод"}
 RESOLUTION_MARKERS = {"восстанов", "устран", "нормализ", "открыли", "заверш", "опроверг", "усилили"}
 BENIGN_MARKERS = {"форум", "хакатон", "конкурс", "наград", "побед", "турнир", "праздник", "литурги", "отборочн", "встретил", "выступил", "мероприят"}
+MIN_CLUSTER_SIMILARITY = 0.47
 ANCHOR_EXCLUDE = {
     "жители",
     "житель",
@@ -245,7 +246,7 @@ class AnalyticsService:
                 if score > best_score:
                     best_cluster = cluster
                     best_score = score
-            if best_cluster and best_score >= 0.48:
+            if best_cluster and best_score >= MIN_CLUSTER_SIMILARITY:
                 best_cluster.add(event)
             else:
                 new_cluster = TopicCluster()

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import re
 from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
+
+from madrigal_assistant.text import clean_public_text
 
 
 class SourceDefinition(BaseModel):
@@ -50,14 +51,18 @@ class RawEvent(BaseModel):
     def normalize_source_type(cls, value: str) -> str:
         return value.strip().lower()
 
-    @field_validator("title", "text")
+    @field_validator("title", mode="before")
     @classmethod
-    def normalize_text(cls, value: str | None) -> str | None:
+    def normalize_title(cls, value: str | None) -> str | None:
         if value is None:
-            return value
-        cleaned = re.sub(r"[\U00010000-\U0010ffff]", "", value)
-        cleaned = cleaned.replace("\ufe0f", "")
-        return " ".join(cleaned.split())
+            return None
+        cleaned = clean_public_text(value)
+        return cleaned or None
+
+    @field_validator("text", mode="before")
+    @classmethod
+    def normalize_text(cls, value: str | None) -> str:
+        return clean_public_text(value)
 
 
 class TopicEvidence(BaseModel):
