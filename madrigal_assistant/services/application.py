@@ -3,8 +3,11 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from madrigal_assistant.analytics import AnalyticsService
 from madrigal_assistant.ingest import IngestionService
@@ -29,6 +32,11 @@ class RegionalPulseService:
         events = self._parse_payload(payload, filename or get_seed_path().name)
         inserted, updated = self.db.upsert_events(events)
         return ImportSeedResponse(imported=inserted, updated=updated, source=source)
+
+    def import_manual(self, upload_bytes: bytes, filename: str) -> ImportSeedResponse:
+        events = self._parse_payload(upload_bytes, filename)
+        inserted, updated = self.db.upsert_events(events)
+        return ImportSeedResponse(imported=inserted, updated=updated, source=filename)
 
     def run_ingest(self, max_per_source: int = 8) -> IngestRunResult:
         existing_ids = {event.event_id for event in self.db.fetch_events()}
@@ -189,19 +197,182 @@ class RegionalPulseService:
             "source_types": sorted({event.source_type for event in events}),
         }
 
+    def get_source_catalog(self) -> list[dict[str, Any]]:
+        return self.region_config.get("source_catalog", [])
+
+    def source_catalog_summary(self) -> dict[str, int]:
+        catalog = self.get_source_catalog()
+        counts = Counter(item.get("status", "candidate") for item in catalog)
+        return {
+            "total": len(catalog),
+            "stable": counts.get("stable", 0),
+            "candidate": counts.get("candidate", 0),
+            "blocked": counts.get("blocked", 0),
+            "live_enabled": sum(1 for item in catalog if item.get("enabled_in_live_config")),
+        }
+
     def _parse_payload(self, payload: bytes, filename: str) -> list[RawEvent]:
-        if filename.lower().endswith(".csv"):
-            records = list(csv.DictReader(io.StringIO(payload.decode("utf-8"))))
+        text_payload = self._decode_payload(payload)
+        lower_name = filename.lower()
+        if lower_name.endswith(".csv"):
+            records = list(csv.DictReader(io.StringIO(text_payload)))
+        elif lower_name.endswith(".jsonl"):
+            records = [json.loads(line) for line in text_payload.splitlines() if line.strip()]
         else:
-            parsed = json.loads(payload.decode("utf-8"))
-            records = parsed.get("events", parsed) if isinstance(parsed, dict) else parsed
+            parsed = json.loads(text_payload)
+            if isinstance(parsed, dict):
+                records = parsed.get("events") or parsed.get("items") or parsed.get("records") or parsed.get("posts") or parsed
+            else:
+                records = parsed
+        if isinstance(records, dict):
+            records = [records]
 
         events: list[RawEvent] = []
         for record in records:
-            if not record.get("event_id"):
-                identity = record.get("external_id") or record.get("url") or record.get("title") or record.get("text", "")
-                record["event_id"] = stable_event_id(record.get("source_name", "seed"), str(identity), record.get("published_at", ""))
-            if not record.get("region"):
-                record["region"] = self.region_config["region_name"]
-            events.append(RawEvent.model_validate(record))
+            normalized = self._normalize_record(record, filename)
+            events.append(RawEvent.model_validate(normalized))
         return events
+
+    @staticmethod
+    def _decode_payload(payload: bytes) -> str:
+        for encoding in ("utf-8-sig", "utf-8", "cp1251"):
+            try:
+                return payload.decode(encoding)
+            except UnicodeDecodeError:
+                continue
+        return payload.decode("utf-8", errors="ignore")
+
+    def _normalize_record(self, record: dict[str, Any], filename: str) -> dict[str, Any]:
+        known_keys = {
+            "event_id",
+            "external_id",
+            "url",
+            "source_id",
+            "source_type",
+            "source_name",
+            "region",
+            "published_at",
+            "title",
+            "text",
+            "author",
+            "municipality",
+            "engagement",
+            "is_official",
+            "metadata",
+        }
+        source_name = self._pick_first(record, "source_name", "source", "group_name", "community", "channel", "publisher")
+        source_name = source_name or Path(filename).stem.replace("_", " ")
+        source_type = self._pick_first(record, "source_type", "kind", "type")
+        source_type = (str(source_type).strip().lower() if source_type else self._default_source_type(source_name, record))
+        source_id = self._pick_first(record, "source_id", "source_slug", "group_domain", "channel_id")
+        source_id = source_id or self._slugify(source_name)
+        external_id = self._pick_first(record, "external_id", "post_id", "guid", "id")
+        published_at = self._parse_published_at(
+            self._pick_first(record, "published_at", "published", "date", "created_at", "timestamp", "post_date")
+        )
+        text = self._pick_first(record, "text", "message", "content", "description", "body", "post_text", "caption")
+        title = self._pick_first(record, "title", "headline", "subject")
+        if not text:
+            text = title or ""
+        if not title:
+            title = text.split(".")[0][:120].strip() if text else source_name
+        url = self._pick_first(record, "url", "link", "post_url", "permalink")
+        if not url:
+            identity = external_id or title or text or source_name
+            url = f"manual://{source_id}/{self._slugify(str(identity)) or 'event'}"
+        municipality = self._pick_first(record, "municipality", "municipality_name", "city", "district", "locality")
+        engagement = self._pick_first(record, "engagement", "views", "view_count", "reach")
+        is_official = self._coerce_bool(self._pick_first(record, "is_official", "official", "isOfficial"))
+
+        normalized = {
+            "event_id": record.get("event_id"),
+            "external_id": str(external_id) if external_id is not None else None,
+            "url": str(url),
+            "source_id": str(source_id),
+            "source_type": source_type,
+            "source_name": str(source_name),
+            "region": record.get("region") or self.region_config["region_name"],
+            "published_at": published_at,
+            "title": title,
+            "text": text,
+            "author": self._pick_first(record, "author", "author_name", "user", "sender"),
+            "municipality": municipality,
+            "engagement": self._coerce_int(engagement),
+            "is_official": is_official,
+            "metadata": record.get("metadata", {}),
+        }
+
+        metadata = dict(normalized["metadata"]) if isinstance(normalized["metadata"], dict) else {"raw_metadata": normalized["metadata"]}
+        for key, value in record.items():
+            if key in known_keys or value in (None, ""):
+                continue
+            metadata[key] = value
+        normalized["metadata"] = metadata
+
+        if not normalized["event_id"]:
+            identity = normalized["external_id"] or normalized["url"] or normalized["title"] or normalized["text"]
+            normalized["event_id"] = stable_event_id(normalized["source_id"], str(identity), normalized["published_at"].isoformat())
+        return normalized
+
+    @staticmethod
+    def _pick_first(record: dict[str, Any], *keys: str) -> Any:
+        for key in keys:
+            value = record.get(key)
+            if value not in (None, ""):
+                return value
+        return None
+
+    @staticmethod
+    def _coerce_bool(value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        normalized = str(value).strip().lower()
+        return normalized in {"1", "true", "yes", "y", "да"}
+
+    @staticmethod
+    def _coerce_int(value: Any) -> int | None:
+        if value in (None, ""):
+            return None
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, (int, float)):
+            return int(value)
+        digits = re.sub(r"[^\d]", "", str(value))
+        return int(digits) if digits else None
+
+    @staticmethod
+    def _slugify(value: str) -> str:
+        slug = re.sub(r"[^0-9a-zа-яё]+", "-", value.lower(), flags=re.IGNORECASE).strip("-")
+        return slug or "manual-source"
+
+    @staticmethod
+    def _parse_published_at(raw_value: Any) -> datetime:
+        if isinstance(raw_value, datetime):
+            return raw_value if raw_value.tzinfo else raw_value.astimezone()
+        if isinstance(raw_value, (int, float)):
+            return datetime.fromtimestamp(raw_value).astimezone()
+        if isinstance(raw_value, str):
+            stripped = raw_value.strip()
+            if stripped.isdigit():
+                return datetime.fromtimestamp(int(stripped)).astimezone()
+            return datetime.fromisoformat(stripped.replace("Z", "+00:00"))
+        return datetime.now().astimezone()
+
+    def _default_source_type(self, source_name: str, record: dict[str, Any]) -> str:
+        haystack = " ".join(
+            str(value)
+            for value in (
+                source_name,
+                record.get("url"),
+                record.get("source"),
+                record.get("group_name"),
+            )
+            if value
+        ).lower()
+        if any(marker in haystack for marker in ("vk.com", "telegram", "t.me", "max", "чат")):
+            return "social"
+        if any(marker in haystack for marker in ("администрац", "правительств", "мчс", "официаль")):
+            return "official"
+        return "media"

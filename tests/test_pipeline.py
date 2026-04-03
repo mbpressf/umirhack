@@ -2,6 +2,7 @@ from datetime import datetime
 from pathlib import Path
 
 from madrigal_assistant.models import RawEvent
+from madrigal_assistant.settings import load_region_config
 from madrigal_assistant.services import RegionalPulseService
 
 
@@ -52,3 +53,30 @@ def test_unknown_municipality_is_preserved(tmp_path: Path) -> None:
     snapshot = service.get_top_issues()
     unknown_topics = [item.topic for item in snapshot.items if "unknown" in item.topic.municipalities]
     assert unknown_topics
+
+
+def test_manual_csv_import_normalizes_alias_columns(tmp_path: Path) -> None:
+    service = build_service(tmp_path)
+    csv_payload = (
+        "source,created_at,message,city,link,official,views\n"
+        "MAX / районный чат,2026-04-03T09:30:00+03:00,Жители пишут про запах гари,Батайск,https://max.example/post/1,false,1450\n"
+    ).encode("utf-8")
+
+    result = service.import_manual(csv_payload, "max_dump.csv")
+    assert result.imported == 1
+
+    events = service.get_raw_events().items
+    assert len(events) == 1
+    assert events[0].source_type == "social"
+    assert events[0].municipality == "Батайск"
+    assert events[0].engagement == 1450
+
+
+def test_region_config_builds_live_sources_from_catalog() -> None:
+    config = load_region_config()
+    source_ids = {item["id"] for item in config["sources"]}
+
+    assert "don24_rss" in source_ids
+    assert "telegram_don24tv" in source_ids
+    assert "donnews_site" not in source_ids
+    assert "max_public_chats_manual" not in source_ids

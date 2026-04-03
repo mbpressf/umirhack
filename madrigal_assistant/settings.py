@@ -8,6 +8,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG_PATH = ROOT_DIR / "config" / "demo_region.rostov.json"
 DEFAULT_DB_PATH = ROOT_DIR / "data" / "madrigal.db"
 DEFAULT_SEED_PATH = ROOT_DIR / "data" / "seed_rostov_last7d.json"
+DEFAULT_SOURCE_CATALOG_PATH = ROOT_DIR / "config" / "source_catalog.rostov.json"
 
 
 def get_db_path() -> Path:
@@ -22,6 +23,51 @@ def get_seed_path() -> Path:
     return Path(os.getenv("MADRIGAL_SEED_PATH", DEFAULT_SEED_PATH))
 
 
+def get_source_catalog_path() -> Path:
+    return Path(os.getenv("MADRIGAL_SOURCE_CATALOG_PATH", DEFAULT_SOURCE_CATALOG_PATH))
+
+
+def _load_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _resolve_path(raw_path: str | None, base_dir: Path, default_path: Path) -> Path:
+    if not raw_path:
+        return default_path
+    path = Path(raw_path)
+    if not path.is_absolute():
+        path = (base_dir / path).resolve()
+    return path
+
+
+def load_source_catalog(source_catalog_path: Path | None = None) -> dict:
+    path = source_catalog_path or get_source_catalog_path()
+    return _load_json(path)
+
+
+def _build_live_sources(catalog_payload: dict | list) -> list[dict]:
+    entries = catalog_payload.get("sources", catalog_payload) if isinstance(catalog_payload, dict) else catalog_payload
+    live_sources: list[dict] = []
+    for item in entries:
+        if not item.get("enabled_in_live_config"):
+            continue
+        if item.get("status") == "blocked":
+            continue
+        required_env = item.get("requires_env")
+        if required_env and not os.getenv(required_env):
+            continue
+        live_sources.append(dict(item))
+    return live_sources
+
+
 def load_region_config(config_path: Path | None = None) -> dict:
     path = config_path or get_config_path()
-    return json.loads(path.read_text(encoding="utf-8"))
+    payload = _load_json(path)
+    source_catalog_path = payload.get("source_catalog_path")
+    if source_catalog_path:
+        resolved_catalog_path = _resolve_path(source_catalog_path, path.parent, get_source_catalog_path())
+        catalog_payload = load_source_catalog(resolved_catalog_path)
+        payload["source_catalog_path"] = str(resolved_catalog_path)
+        payload["source_catalog"] = catalog_payload.get("sources", catalog_payload)
+        payload["sources"] = _build_live_sources(catalog_payload)
+    return payload

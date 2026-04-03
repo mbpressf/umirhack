@@ -30,6 +30,8 @@ def create_app(service: RegionalPulseService | None = None) -> FastAPI:
             "region": api_service.region_config["region_name"],
             "timezone": api_service.region_config["timezone"],
             "sources": api_service.region_config["sources"],
+            "source_catalog": api_service.get_source_catalog(),
+            "source_catalog_summary": api_service.source_catalog_summary(),
             "filters": api_service.filter_options(),
         }
 
@@ -107,6 +109,10 @@ def create_app(service: RegionalPulseService | None = None) -> FastAPI:
         if file is None:
             return api_service.import_seed()
         return api_service.import_seed(upload_bytes=await file.read(), filename=file.filename or "upload.json")
+
+    @app.post("/api/import/manual", response_model=ImportSeedResponse)
+    async def import_manual(file: UploadFile = File(...)) -> ImportSeedResponse:
+        return api_service.import_manual(upload_bytes=await file.read(), filename=file.filename or "manual.json")
 
     @app.get("/api/export", response_class=PlainTextResponse)
     def export_report(

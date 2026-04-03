@@ -35,11 +35,50 @@ def export_catalog_csv(catalog_json_path: Path, csv_path: Path) -> None:
     with csv_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(
             handle,
-            fieldnames=["id", "name", "kind", "fetcher", "url", "status", "enabled_in_live_config", "priority", "coverage", "notes"],
+            fieldnames=[
+                "id",
+                "name",
+                "kind",
+                "fetcher",
+                "url",
+                "status",
+                "enabled_in_live_config",
+                "priority",
+                "coverage",
+                "requires_env",
+                "domain",
+                "owner_id",
+                "tags",
+                "notes",
+            ],
         )
         writer.writeheader()
         for row in rows:
-            writer.writerow({key: row.get(key) for key in writer.fieldnames})
+            prepared = {key: row.get(key) for key in writer.fieldnames}
+            prepared["tags"] = ", ".join(row.get("tags", []))
+            writer.writerow(prepared)
+
+
+def discover_manual_inputs(manual_dir: Path, explicit_inputs: list[str]) -> list[Path]:
+    files: list[Path] = []
+    if manual_dir.exists():
+        for candidate in sorted(manual_dir.iterdir()):
+            if candidate.is_file() and candidate.suffix.lower() in {".json", ".jsonl", ".csv"}:
+                files.append(candidate)
+    for raw_path in explicit_inputs:
+        candidate = Path(raw_path)
+        if candidate.exists() and candidate.is_file():
+            files.append(candidate)
+
+    unique_paths: list[Path] = []
+    seen: set[Path] = set()
+    for item in files:
+        resolved = item.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        unique_paths.append(resolved)
+    return unique_paths
 
 
 def main() -> None:
@@ -48,9 +87,12 @@ def main() -> None:
     parser.add_argument("--catalog", default=str(ROOT_DIR / "config" / "source_catalog.rostov.json"))
     parser.add_argument("--db", default=str(ROOT_DIR / "datasets" / "rostov" / "collector.db"))
     parser.add_argument("--output-dir", default=str(ROOT_DIR / "datasets" / "rostov"))
+    parser.add_argument("--manual-dir", default=str(ROOT_DIR / "datasets" / "rostov" / "manual"))
+    parser.add_argument("--manual-input", action="append", default=[])
     parser.add_argument("--max-per-source", type=int, default=8)
     parser.add_argument("--include-seed", action="store_true", default=True)
     parser.add_argument("--skip-seed", action="store_true")
+    parser.add_argument("--skip-manual", action="store_true")
     parser.add_argument("--reset-db", action="store_true")
     args = parser.parse_args()
 
@@ -65,6 +107,12 @@ def main() -> None:
         service.db.reset()
     if args.include_seed and not args.skip_seed:
         service.import_seed()
+
+    manual_results = []
+    if not args.skip_manual:
+        for manual_path in discover_manual_inputs(Path(args.manual_dir), args.manual_input):
+            result = service.import_manual(upload_bytes=manual_path.read_bytes(), filename=manual_path.name)
+            manual_results.append({"path": str(manual_path), **result.model_dump()})
 
     ingest_result = service.run_ingest(max_per_source=args.max_per_source)
     raw_events = service.get_raw_events()
@@ -83,6 +131,8 @@ def main() -> None:
     top_latest = raw_dir / "latest_top_issues.json"
     stats_timestamped = raw_dir / f"source_stats_{timestamp}.json"
     stats_latest = raw_dir / "latest_source_stats.json"
+    manual_timestamped = raw_dir / f"manual_imports_{timestamp}.json"
+    manual_latest = raw_dir / "latest_manual_imports.json"
     briefing_timestamped_json = briefing_dir / f"briefing_{timestamp}.json"
     briefing_latest_json = briefing_dir / "latest_briefing.json"
     briefing_timestamped_md = briefing_dir / f"briefing_{timestamp}.md"
@@ -94,6 +144,8 @@ def main() -> None:
     write_json(top_latest, top_payload)
     write_json(stats_timestamped, ingest_payload)
     write_json(stats_latest, ingest_payload)
+    write_json(manual_timestamped, manual_results)
+    write_json(manual_latest, manual_results)
     write_json(briefing_timestamped_json, briefing)
     write_json(briefing_latest_json, briefing)
     briefing_timestamped_md.write_text(briefing_md, encoding="utf-8")
@@ -110,6 +162,8 @@ def main() -> None:
             "top_issues": len(top_issues.items),
             "inserted": ingest_result.inserted,
             "updated": ingest_result.updated,
+            "manual_files": len(manual_results),
+            "manual_imported": sum(item["imported"] for item in manual_results),
             "output_dir": str(output_dir),
             "briefing_md": str(briefing_latest_md),
         },

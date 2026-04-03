@@ -65,12 +65,19 @@ with st.sidebar:
     if st.button("Обновить live-источники", use_container_width=True):
         result = service.run_ingest(max_per_source=8)
         st.success(f"Сканировано: {result.scanned}, новых: {result.inserted}, обновлено: {result.updated}")
-    uploaded = st.file_uploader("Импорт JSON/CSV", type=["json", "csv"])
-    if uploaded is not None and st.button("Загрузить файл", use_container_width=True):
-        result = service.import_seed(upload_bytes=uploaded.read(), filename=uploaded.name)
+    uploaded = st.file_uploader("Manual import JSON/CSV/JSONL", type=["json", "jsonl", "csv"])
+    if uploaded is not None and st.button("Загрузить manual файл", use_container_width=True):
+        result = service.import_manual(upload_bytes=uploaded.read(), filename=uploaded.name)
         st.success(f"Импортировано: {result.imported}, обновлено: {result.updated}")
 
     options = service.filter_options()
+    catalog_summary = service.source_catalog_summary()
+    st.caption(
+        f"Каталог источников: {catalog_summary['total']} всего | "
+        f"stable {catalog_summary['stable']} | "
+        f"candidate {catalog_summary['candidate']} | "
+        f"blocked {catalog_summary['blocked']}"
+    )
     start, end = _selected_range()
     selected_sector = st.selectbox("Сфера", ["Все"] + options["sectors"])
     selected_municipality = st.selectbox("Муниципалитет", ["Все"] + options["municipalities"])

@@ -8,8 +8,9 @@
 - `SQLite (WAL)` как локальная база событий
 - `Streamlit`-дашборд с фильтрами, explainable score и экспортом
 - `seeded dataset` по Ростову-на-Дону и Ростовской области
-- live-адаптеры для `RSS`, HTML-новостей и публичных Telegram-каналов
+- live-адаптеры для `RSS`, HTML-новостей, публичных Telegram-каналов и `VK API`
 - `source catalog` для data-команды и `monitoring agent` для авто-сводок
+- `manual import` для `CSV/JSON/JSONL`, чтобы быстро докидывать выгрузки из внешних систем
 
 ## Быстрый старт
 
@@ -41,6 +42,9 @@ python -m venv .venv
 Полный каталог источников для data-команды:
 - `config/source_catalog.rostov.json`
 
+Папка для ручных выгрузок:
+- `datasets/rostov/manual/`
+
 Собрать свежий датасет, source health и briefing:
 
 ```powershell
@@ -51,6 +55,14 @@ python -m venv .venv
 - `datasets/rostov/raw/`
 - `datasets/rostov/catalog/`
 - `datasets/rostov/briefings/`
+
+Чтобы вручную докинуть выгрузки перед сборкой:
+
+```powershell
+.venv\Scripts\python scripts/collect_rostov_dataset.py --manual-input D:\path\to\vk_dump.json --manual-input D:\path\to\appeals.csv
+```
+
+Все `json/jsonl/csv` из `datasets/rostov/manual/` тоже подхватываются автоматически.
 
 Запустить только агент-сводчик поверх текущей БД:
 
@@ -71,3 +83,8 @@ python -m venv .venv
 
 По умолчанию проект настроен на `Ростовскую область`.
 Регион можно заменить через `MADRIGAL_CONFIG_PATH` и `MADRIGAL_SEED_PATH`.
+
+## VK и MAX
+
+- `VK` теперь поддерживается как live-источник через `VK API`. Чтобы включить `stable` VK-источники из каталога, задайте `VK_API_TOKEN`.
+- `MAX` в проекте пока оставлен как `manual import`-контур. Это безопаснее для хакатона, чем завязывать demo на внешний API, который ещё нужно отдельно проверять и стабилизировать.

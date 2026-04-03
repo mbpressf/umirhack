@@ -17,6 +17,15 @@ class SourceDefinition(BaseModel):
     is_official: bool = False
     link_regex: str | None = None
     channel: str | None = None
+    domain: str | None = None
+    owner_id: int | None = None
+    vk_filter: str | None = None
+    requires_env: str | None = None
+    status: str | None = None
+    enabled_in_live_config: bool | None = None
+    priority: int | None = None
+    coverage: str | None = None
+    tags: list[str] = Field(default_factory=list)
 
 
 class RawEvent(BaseModel):

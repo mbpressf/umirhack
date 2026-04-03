@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
+import os
 import re
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 from html import unescape
-from urllib.parse import urljoin
+from urllib.parse import urlencode, urljoin
 from urllib.request import Request, urlopen
 from xml.etree import ElementTree
 
@@ -20,6 +22,10 @@ def _fetch_text(url: str) -> str:
     request = Request(url, headers=DEFAULT_HEADERS)
     with urlopen(request, timeout=20) as response:
         return response.read().decode("utf-8", "ignore")
+
+
+def _fetch_json(url: str) -> dict:
+    return json.loads(_fetch_text(url))
 
 
 def _parse_datetime(raw_value: str | None, fallback: datetime | None = None) -> datetime:
@@ -100,6 +106,8 @@ class IngestionService:
                     items = self._fetch_html(source, limit)
                 elif source.fetcher == "telegram":
                     items = self._fetch_telegram(source, limit)
+                elif source.fetcher == "vk_api":
+                    items = self._fetch_vk_api(source, limit)
                 else:
                     raise ValueError(f"Unsupported fetcher: {source.fetcher}")
                 collected.extend(items)
@@ -245,3 +253,93 @@ class IngestionService:
             if len(events) >= limit:
                 break
         return events
+
+    def _fetch_vk_api(self, source: SourceDefinition, limit: int) -> list[RawEvent]:
+        token_name = source.requires_env or "VK_API_TOKEN"
+        token = os.getenv(token_name)
+        if not token:
+            raise ValueError(f"{token_name} is not set")
+
+        params: dict[str, str | int] = {
+            "access_token": token,
+            "v": "5.199",
+            "count": min(limit, 100),
+            "filter": source.vk_filter or "owner",
+        }
+        if source.owner_id is not None:
+            params["owner_id"] = source.owner_id
+        else:
+            domain = source.domain or self._extract_vk_domain(source.url)
+            if not domain:
+                raise ValueError("VK source requires domain or owner_id")
+            params["domain"] = domain
+
+        payload = _fetch_json(f"https://api.vk.com/method/wall.get?{urlencode(params)}")
+        if payload.get("error"):
+            error = payload["error"]
+            raise ValueError(f"VK API error {error.get('error_code')}: {error.get('error_msg')}")
+
+        items = payload.get("response", {}).get("items", [])
+        events: list[RawEvent] = []
+        for item in items:
+            text = self._extract_vk_post_text(item)
+            if not text:
+                continue
+            url = f"https://vk.com/wall{item.get('owner_id')}_{item.get('id')}"
+            title = shorten(first_sentence(text), 100) or source.name
+            engagement = (item.get("views") or {}).get("count")
+            if engagement is None:
+                engagement = sum((item.get(metric) or {}).get("count", 0) for metric in ("likes", "comments", "reposts"))
+
+            events.append(
+                RawEvent(
+                    event_id=stable_event_id(source.id, str(item.get("id") or url)),
+                    external_id=str(item.get("id") or url),
+                    url=url,
+                    source_id=source.id,
+                    source_type=source.kind,
+                    source_name=source.name,
+                    region=self.region_config["region_name"],
+                    published_at=datetime.fromtimestamp(item.get("date", datetime.now().timestamp())).astimezone(),
+                    title=title,
+                    text=text,
+                    engagement=engagement,
+                    is_official=source.is_official,
+                    metadata={
+                        "likes": (item.get("likes") or {}).get("count"),
+                        "comments": (item.get("comments") or {}).get("count"),
+                        "reposts": (item.get("reposts") or {}).get("count"),
+                        "attachments": [attachment.get("type") for attachment in item.get("attachments", [])],
+                    },
+                )
+            )
+            if len(events) >= limit:
+                break
+        return events
+
+    @staticmethod
+    def _extract_vk_domain(url: str) -> str | None:
+        match = re.search(r"vk\.com/([^/?#]+)", url)
+        return match.group(1) if match else None
+
+    @staticmethod
+    def _extract_vk_post_text(item: dict) -> str:
+        text_parts = []
+        if item.get("text"):
+            text_parts.append(item["text"])
+        for history_item in item.get("copy_history", []):
+            if history_item.get("text"):
+                text_parts.append(history_item["text"])
+        attachments = item.get("attachments", [])
+        for attachment in attachments:
+            attachment_type = attachment.get("type")
+            payload = attachment.get(attachment_type, {})
+            if attachment_type == "article":
+                text_parts.extend([payload.get("title", ""), payload.get("description", "")])
+            elif attachment_type in {"video", "audio", "podcast"}:
+                text_parts.extend([payload.get("title", ""), payload.get("description", "")])
+            elif attachment_type == "link":
+                text_parts.extend([payload.get("title", ""), payload.get("caption", ""), payload.get("description", "")])
+            elif attachment_type == "photo":
+                text_parts.append(payload.get("text", ""))
+        return " ".join(part.strip() for part in text_parts if part and str(part).strip())
