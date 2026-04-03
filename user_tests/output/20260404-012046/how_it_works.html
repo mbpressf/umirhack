@@ -1,0 +1,452 @@
+
+    <html lang="ru">
+    <head>
+      <meta charset="utf-8" />
+      <title>How It Works · Visual Analytics</title>
+      <style>
+        body {
+          font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+          margin: 0;
+          background: linear-gradient(180deg, #eef7f9 0%, #ffffff 100%);
+          color: #10212b;
+        }
+        .wrap {
+          max-width: 1280px;
+          margin: 0 auto;
+          padding: 32px 24px 64px;
+        }
+        .hero, .flow-card {
+          background: white;
+          border: 1px solid #d8e5e8;
+          border-radius: 22px;
+          padding: 24px;
+          box-shadow: 0 18px 45px rgba(15, 23, 32, 0.08);
+          margin-bottom: 24px;
+        }
+        .badge, .mini-badge {
+          display: inline-block;
+          padding: 6px 10px;
+          border-radius: 999px;
+          background: #0f766e;
+          color: white;
+          font-weight: 700;
+        }
+        .mini-badge {
+          background: #1d4ed8;
+          font-size: 12px;
+        }
+        .flow-head {
+          display: flex;
+          gap: 16px;
+          align-items: flex-start;
+          margin-bottom: 14px;
+        }
+        .stage {
+          background: #f8fbfc;
+          border: 1px solid #deeaee;
+          border-radius: 18px;
+          padding: 18px;
+        }
+        .arrow {
+          text-align: center;
+          font-size: 30px;
+          color: #0f766e;
+          margin: 10px 0;
+        }
+        .raw-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+          gap: 14px;
+        }
+        .raw-card, .info-box {
+          background: white;
+          border: 1px solid #d8e5e8;
+          border-radius: 14px;
+          padding: 14px;
+        }
+        .info-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 14px;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        td {
+          border-bottom: 1px solid #eef2f7;
+          padding: 6px 4px;
+          vertical-align: top;
+        }
+        code {
+          background: #eef6f8;
+          padding: 2px 6px;
+          border-radius: 6px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="wrap">
+        <section class="hero">
+          <h1>Как это работает</h1>
+          <p>Эта страница показывает путь конкретной темы: <code>raw events → cluster → problem card → top issue</code>.</p>
+          <p>Смысл страницы: можно быстро понять, что аналитика не “магия”, а прозрачная цепочка преобразований.</p>
+          <p><a href="index.html"><strong>Вернуться к главному visual report</strong></a></p>
+        </section>
+        
+            <section class="flow-card">
+              <div class="flow-head">
+                <div class="badge">#1</div>
+                <div>
+                  <h2>В части Батайска пропало электричество</h2>
+                  <p><strong>Сектор:</strong> ЖКХ · <strong>Муниципалитеты:</strong> Батайск</p>
+                </div>
+              </div>
+
+              <div class="pipeline">
+                <div class="stage">
+                  <h3>1. Raw events</h3>
+                  <p>Сырые сигналы из разных источников. Здесь видно, что тема не выдумана, а собрана из реальных сообщений.</p>
+                  <div class="raw-grid">
+                    
+    <article class="raw-card">
+      <div class="mini-badge">social</div>
+      <h4>После сообщения о восстановлении света часть домов в Батайске всё ещё без электричества</h4>
+      <p><strong>Источник:</strong> Telegram / Батайск район</p>
+      <p><strong>Время:</strong> 02.04.2026 19:35</p>
+      <p><strong>Муниципалитет:</strong> Батайск</p>
+      <p>После официального сообщения жители Батайска продолжают писать, что часть домов ещё остаётся без света и напряжение не стабилизировалось</p>
+      <p><a href="https://demo.seed/rostov/power-bataysk-social-2">Открыть первоисточник</a></p>
+    </article>
+    
+    <article class="raw-card">
+      <div class="mini-badge">official</div>
+      <h4>Энергетики сообщили о восстановлении электроснабжения в Батайске</h4>
+      <p><strong>Источник:</strong> Telegram / Правительство Ростовской области</p>
+      <p><strong>Время:</strong> 02.04.2026 19:10</p>
+      <p><strong>Муниципалитет:</strong> Батайск</p>
+      <p>По данным региональных служб, электроснабжение в Батайске восстановлено после локального технологического сбоя. Работы завершены в штатном режиме</p>
+      <p><a href="https://demo.seed/rostov/power-bataysk-official-1">Открыть первоисточник</a></p>
+    </article>
+    
+    <article class="raw-card">
+      <div class="mini-badge">social</div>
+      <h4>В части Батайска пропало электричество</h4>
+      <p><strong>Источник:</strong> VK / Батайск Онлайн</p>
+      <p><strong>Время:</strong> 02.04.2026 18:15</p>
+      <p><strong>Муниципалитет:</strong> Батайск</p>
+      <p>Жители Батайска сообщили о перебоях с электричеством вечером в нескольких кварталах. Пользователи пишут, что отключение произошло без предупреждения</p>
+      <p><a href="https://demo.seed/rostov/power-bataysk-social-1">Открыть первоисточник</a></p>
+    </article>
+    
+                  </div>
+                </div>
+
+                <div class="arrow">↓</div>
+
+                <div class="stage">
+                  <h3>2. Cluster / тема</h3>
+                  <p>На этом шаге система склеивает похожие сообщения в одну проблему.</p>
+                  <div class="info-grid">
+                    <div class="info-box">
+                      <h4>Что получилось</h4>
+                      <p><strong>Label:</strong> В части Батайска пропало электричество</p>
+                      <p><strong>Event count:</strong> 3</p>
+                      <p><strong>Source count:</strong> 3</p>
+                      <p><strong>Source mix:</strong> social: 2, official: 1</p>
+                      <p><strong>Contradiction:</strong> True</p>
+                      <p><strong>Bot score:</strong> 0.15</p>
+                    </div>
+                    <div class="info-box">
+                      <h4>Score breakdown</h4>
+                      <table>
+                        <tbody>
+                          <tr><td>surge</td><td>1.0</td></tr><tr><td>diversity</td><td>0.75</td></tr><tr><td>geography</td><td>0.5</td></tr><tr><td>severity</td><td>0.88</td></tr><tr><td>official_signal</td><td>1.0</td></tr><tr><td>citizen_volume</td><td>0.4</td></tr><tr><td>bot_penalty</td><td>0.15</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="arrow">↓</div>
+
+                <div class="stage">
+                  <h3>3. Problem card</h3>
+                  <p>Фронтовая карточка, которую удобно показывать пользователю или жюри.</p>
+                  <div class="info-grid">
+                    <div class="info-box">
+                      <h4>Карточка</h4>
+                      <p><strong>Urgency:</strong> high</p>
+                      <p><strong>Status:</strong> mixed_signal</p>
+                      <p><strong>Summary:</strong> За период с 02.04 18:15 по 02.04 19:35 по теме «В части Батайска пропало электричество» зафиксировано 3 сообщений из 3 источников. География: Батайск. Основные факты: После официального сообщения жители Батайска продолжают писать, что часть домов ещё остаётся без света и напряжение не стабилизир… По данным региональных служб, электроснабжение в Батайске восстановлено после локального технологического сбоя. Работы завершены… Есть официальные сообщения. Отмечено расхождение между официальной версией и сообщениями пользователей.</p>
+                    </div>
+                    <div class="info-box">
+                      <h4>Key facts</h4>
+                      <ul><li>После официального сообщения жители Батайска продолжают писать, что часть домов ещё остаётся без света и напряжение не стабилизировалось</li><li>По данным региональных служб, электроснабжение в Батайске восстановлено после локального технологического сбоя. Работы завершены в штатном режиме</li><li>Жители Батайска сообщили о перебоях с электричеством вечером в нескольких кварталах. Пользователи пишут, что отключение произошло без предупреждения</li></ul>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="arrow">↓</div>
+
+                <div class="stage">
+                  <h3>4. Top issue</h3>
+                  <p>Итоговый объект ранжирования, который попадает в общий top региона.</p>
+                  <div class="info-grid">
+                    <div class="info-box">
+                      <h4>Итог</h4>
+                      <p><strong>Rank:</strong> #1</p>
+                      <p><strong>Score:</strong> 60.16</p>
+                      <p><strong>Issue relevance:</strong> 0.8</p>
+                    </div>
+                    <div class="info-box">
+                      <h4>Почему в топе</h4>
+                      <ul><li>есть всплеск сообщений за последние 24 часа</li><li>тема подтверждается несколькими независимыми источниками</li><li>по теме есть официальный сигнал</li><li>есть расхождение между официальным обновлением и пользовательскими сообщениями</li></ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+            
+            <section class="flow-card">
+              <div class="flow-head">
+                <div class="badge">#2</div>
+                <div>
+                  <h2>Жители Таганрога жалуются на очереди в поликлинике №2</h2>
+                  <p><strong>Сектор:</strong> Здравоохранение · <strong>Муниципалитеты:</strong> Таганрог</p>
+                </div>
+              </div>
+
+              <div class="pipeline">
+                <div class="stage">
+                  <h3>1. Raw events</h3>
+                  <p>Сырые сигналы из разных источников. Здесь видно, что тема не выдумана, а собрана из реальных сообщений.</p>
+                  <div class="raw-grid">
+                    
+    <article class="raw-card">
+      <div class="mini-badge">social</div>
+      <h4>После сообщения Минздрава очередь в поликлинике всё равно сохраняется</h4>
+      <p><strong>Источник:</strong> Telegram / Таганрог Новости</p>
+      <p><strong>Время:</strong> 30.03.2026 12:05</p>
+      <p><strong>Муниципалитет:</strong> Таганрог</p>
+      <p>После официального сообщения жители продолжают писать, что очередь в поликлинике №2 Таганрога сохраняется, хотя движение стало быстрее</p>
+      <p><a href="https://demo.seed/rostov/clinic-taganrog-social-2">Открыть первоисточник</a></p>
+    </article>
+    
+    <article class="raw-card">
+      <div class="mini-badge">official</div>
+      <h4>В поликлинике №2 в Таганроге открыли дополнительные окна регистратуры</h4>
+      <p><strong>Источник:</strong> Минздрав Ростовской области</p>
+      <p><strong>Время:</strong> 30.03.2026 11:20</p>
+      <p><strong>Муниципалитет:</strong> Таганрог</p>
+      <p>Минздрав Ростовской области сообщил об открытии дополнительных окон регистратуры и перераспределении потоков пациентов в поликлинике №2 Таганрога</p>
+      <p><a href="https://demo.seed/rostov/clinic-taganrog-official-1">Открыть первоисточник</a></p>
+    </article>
+    
+    <article class="raw-card">
+      <div class="mini-badge">social</div>
+      <h4>С утра огромная очередь в таганрогской поликлинике</h4>
+      <p><strong>Источник:</strong> VK / Таганрог Онлайн</p>
+      <p><strong>Время:</strong> 30.03.2026 08:35</p>
+      <p><strong>Муниципалитет:</strong> Таганрог</p>
+      <p>Жители Таганрога пишут, что в поликлинике №2 очередь растянулась до лестницы. По сообщениям пользователей, прием идет медленнее обычного</p>
+      <p><a href="https://demo.seed/rostov/clinic-taganrog-social-1">Открыть первоисточник</a></p>
+    </article>
+    
+    <article class="raw-card">
+      <div class="mini-badge">media</div>
+      <h4>Жители Таганрога жалуются на очереди в поликлинике №2</h4>
+      <p><strong>Источник:</strong> ДОН 24</p>
+      <p><strong>Время:</strong> 30.03.2026 08:10</p>
+      <p><strong>Муниципалитет:</strong> Таганрог</p>
+      <p>Пациенты поликлиники №2 в Таганроге сообщили о длительном ожидании у регистратуры и нехватке талонов к терапевтам</p>
+      <p><a href="https://demo.seed/rostov/clinic-taganrog-media-1">Открыть первоисточник</a></p>
+    </article>
+    
+                  </div>
+                </div>
+
+                <div class="arrow">↓</div>
+
+                <div class="stage">
+                  <h3>2. Cluster / тема</h3>
+                  <p>На этом шаге система склеивает похожие сообщения в одну проблему.</p>
+                  <div class="info-grid">
+                    <div class="info-box">
+                      <h4>Что получилось</h4>
+                      <p><strong>Label:</strong> Жители Таганрога жалуются на очереди в поликлинике №2</p>
+                      <p><strong>Event count:</strong> 4</p>
+                      <p><strong>Source count:</strong> 4</p>
+                      <p><strong>Source mix:</strong> social: 2, media: 1, official: 1</p>
+                      <p><strong>Contradiction:</strong> True</p>
+                      <p><strong>Bot score:</strong> 0.15</p>
+                    </div>
+                    <div class="info-box">
+                      <h4>Score breakdown</h4>
+                      <table>
+                        <tbody>
+                          <tr><td>surge</td><td>1.0</td></tr><tr><td>diversity</td><td>1.0</td></tr><tr><td>geography</td><td>0.5</td></tr><tr><td>severity</td><td>0.9</td></tr><tr><td>official_signal</td><td>1.0</td></tr><tr><td>citizen_volume</td><td>0.6</td></tr><tr><td>bot_penalty</td><td>0.15</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="arrow">↓</div>
+
+                <div class="stage">
+                  <h3>3. Problem card</h3>
+                  <p>Фронтовая карточка, которую удобно показывать пользователю или жюри.</p>
+                  <div class="info-grid">
+                    <div class="info-box">
+                      <h4>Карточка</h4>
+                      <p><strong>Urgency:</strong> high</p>
+                      <p><strong>Status:</strong> mixed_signal</p>
+                      <p><strong>Summary:</strong> За период с 30.03 08:10 по 30.03 12:05 по теме «Жители Таганрога жалуются на очереди в поликлинике №2» зафиксировано 4 сообщений из 4 источников. География: Таганрог. Основные факты: После официального сообщения жители продолжают писать, что очередь в поликлинике №2 Таганрога сохраняется, хотя движение стало бы… Минздрав Ростовской области сообщил об открытии дополнительных окон регистратуры и перераспределении потоков пациентов в поликлин… Есть официальные сообщения. Отмечено расхождение между официальной версией и сообщениями пользователей.</p>
+                    </div>
+                    <div class="info-box">
+                      <h4>Key facts</h4>
+                      <ul><li>После официального сообщения жители продолжают писать, что очередь в поликлинике №2 Таганрога сохраняется, хотя движение стало быстрее</li><li>Минздрав Ростовской области сообщил об открытии дополнительных окон регистратуры и перераспределении потоков пациентов в поликлинике №2 Таганрога</li><li>Жители Таганрога пишут, что в поликлинике №2 очередь растянулась до лестницы. По сообщениям пользователей, прием идет медленнее обычного</li></ul>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="arrow">↓</div>
+
+                <div class="stage">
+                  <h3>4. Top issue</h3>
+                  <p>Итоговый объект ранжирования, который попадает в общий top региона.</p>
+                  <div class="info-grid">
+                    <div class="info-box">
+                      <h4>Итог</h4>
+                      <p><strong>Rank:</strong> #2</p>
+                      <p><strong>Score:</strong> 57.75</p>
+                      <p><strong>Issue relevance:</strong> 0.7</p>
+                    </div>
+                    <div class="info-box">
+                      <h4>Почему в топе</h4>
+                      <ul><li>есть всплеск сообщений за последние 24 часа</li><li>тема подтверждается несколькими независимыми источниками</li><li>по теме есть официальный сигнал</li><li>есть расхождение между официальным обновлением и пользовательскими сообщениями</li></ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+            
+            <section class="flow-card">
+              <div class="flow-head">
+                <div class="badge">#3</div>
+                <div>
+                  <h2>Запах гари в разных районах Новочеркасска</h2>
+                  <p><strong>Сектор:</strong> Экология и ЧС · <strong>Муниципалитеты:</strong> Новочеркасск</p>
+                </div>
+              </div>
+
+              <div class="pipeline">
+                <div class="stage">
+                  <h3>1. Raw events</h3>
+                  <p>Сырые сигналы из разных источников. Здесь видно, что тема не выдумана, а собрана из реальных сообщений.</p>
+                  <div class="raw-grid">
+                    
+    <article class="raw-card">
+      <div class="mini-badge">official</div>
+      <h4>Специалисты проверяют сообщения о запахе гари в Новочеркасске</h4>
+      <p><strong>Источник:</strong> МЧС по Ростовской области</p>
+      <p><strong>Время:</strong> 31.03.2026 09:25</p>
+      <p><strong>Муниципалитет:</strong> Новочеркасск</p>
+      <p>МЧС по Ростовской области сообщило о проверке информации о запахе гари в Новочеркасске и уточнило, что данные замеров будут опубликованы дополнительно</p>
+      <p><a href="https://demo.seed/rostov/smell-novocherkassk-official-1">Открыть первоисточник</a></p>
+    </article>
+    
+    <article class="raw-card">
+      <div class="mini-badge">social</div>
+      <h4>Запах гари в разных районах Новочеркасска</h4>
+      <p><strong>Источник:</strong> Telegram / Новочеркасск Сегодня</p>
+      <p><strong>Время:</strong> 31.03.2026 08:05</p>
+      <p><strong>Муниципалитет:</strong> Новочеркасск</p>
+      <p>В пабликах Новочеркасска сообщают о запахе гари и дымке. Отдельные сообщения пришли из районов рядом с промышленной зоной</p>
+      <p><a href="https://demo.seed/rostov/smell-novocherkassk-social-1">Открыть первоисточник</a></p>
+    </article>
+    
+    <article class="raw-card">
+      <div class="mini-badge">media</div>
+      <h4>Жители Новочеркасска пожаловались на запах гари утром во вторник</h4>
+      <p><strong>Источник:</strong> 161.RU</p>
+      <p><strong>Время:</strong> 31.03.2026 07:40</p>
+      <p><strong>Муниципалитет:</strong> Новочеркасск</p>
+      <p>В Новочеркасске утром поступили сообщения о запахе гари в нескольких микрорайонах. Пользователи просят опубликовать результаты замеров воздуха</p>
+      <p><a href="https://demo.seed/rostov/smell-novocherkassk-media-1">Открыть первоисточник</a></p>
+    </article>
+    
+                  </div>
+                </div>
+
+                <div class="arrow">↓</div>
+
+                <div class="stage">
+                  <h3>2. Cluster / тема</h3>
+                  <p>На этом шаге система склеивает похожие сообщения в одну проблему.</p>
+                  <div class="info-grid">
+                    <div class="info-box">
+                      <h4>Что получилось</h4>
+                      <p><strong>Label:</strong> Запах гари в разных районах Новочеркасска</p>
+                      <p><strong>Event count:</strong> 3</p>
+                      <p><strong>Source count:</strong> 3</p>
+                      <p><strong>Source mix:</strong> social: 1, media: 1, official: 1</p>
+                      <p><strong>Contradiction:</strong> False</p>
+                      <p><strong>Bot score:</strong> 0.0</p>
+                    </div>
+                    <div class="info-box">
+                      <h4>Score breakdown</h4>
+                      <table>
+                        <tbody>
+                          <tr><td>surge</td><td>1.0</td></tr><tr><td>diversity</td><td>0.75</td></tr><tr><td>geography</td><td>0.5</td></tr><tr><td>severity</td><td>1.0</td></tr><tr><td>official_signal</td><td>1.0</td></tr><tr><td>citizen_volume</td><td>0.4</td></tr><tr><td>bot_penalty</td><td>0.0</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="arrow">↓</div>
+
+                <div class="stage">
+                  <h3>3. Problem card</h3>
+                  <p>Фронтовая карточка, которую удобно показывать пользователю или жюри.</p>
+                  <div class="info-grid">
+                    <div class="info-box">
+                      <h4>Карточка</h4>
+                      <p><strong>Urgency:</strong> medium</p>
+                      <p><strong>Status:</strong> official_response</p>
+                      <p><strong>Summary:</strong> За период с 31.03 07:40 по 31.03 09:25 по теме «Запах гари в разных районах Новочеркасска» зафиксировано 3 сообщений из 3 источников. География: Новочеркасск. Основные факты: МЧС по Ростовской области сообщило о проверке информации о запахе гари в Новочеркасске и уточнило, что данные замеров будут опубл… В пабликах Новочеркасска сообщают о запахе гари и дымке. Отдельные сообщения пришли из районов рядом с промышленной зоной Есть официальные сообщения.</p>
+                    </div>
+                    <div class="info-box">
+                      <h4>Key facts</h4>
+                      <ul><li>МЧС по Ростовской области сообщило о проверке информации о запахе гари в Новочеркасске и уточнило, что данные замеров будут опубликованы дополнительно</li><li>В пабликах Новочеркасска сообщают о запахе гари и дымке. Отдельные сообщения пришли из районов рядом с промышленной зоной</li><li>В Новочеркасске утром поступили сообщения о запахе гари в нескольких микрорайонах. Пользователи просят опубликовать результаты замеров воздуха</li></ul>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="arrow">↓</div>
+
+                <div class="stage">
+                  <h3>4. Top issue</h3>
+                  <p>Итоговый объект ранжирования, который попадает в общий top региона.</p>
+                  <div class="info-grid">
+                    <div class="info-box">
+                      <h4>Итог</h4>
+                      <p><strong>Rank:</strong> #3</p>
+                      <p><strong>Score:</strong> 52.98</p>
+                      <p><strong>Issue relevance:</strong> 0.65</p>
+                    </div>
+                    <div class="info-box">
+                      <h4>Почему в топе</h4>
+                      <ul><li>есть всплеск сообщений за последние 24 часа</li><li>тема подтверждается несколькими независимыми источниками</li><li>по теме есть официальный сигнал</li></ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+            
+      </div>
+    </body>
+    </html>
+    

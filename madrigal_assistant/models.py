@@ -98,6 +98,9 @@ class TopicSummary(BaseModel):
     label: str
     sector: str
     issue_relevance: float = 0.0
+    confidence: float = 0.0
+    trend: str = "stable"
+    verification_state: str = "single_source"
     municipalities: list[str]
     first_seen: datetime
     last_seen: datetime
@@ -126,13 +129,26 @@ class TopIssuesResponse(BaseModel):
     items: list[TopIssue]
 
 
+class ProblemTimelineEvent(BaseModel):
+    published_at: datetime
+    source_name: str
+    source_type: str
+    signal_kind: str
+    snippet: str
+    url: str
+
+
 class ProblemCard(BaseModel):
     topic_id: str
     rank: int
     title: str
     sector: str
     municipalities: list[str]
+    primary_municipality: str
     score: float | None = None
+    confidence: float = 0.0
+    trend: str
+    verification_state: str
     urgency: str
     status: str
     summary: str
@@ -144,6 +160,7 @@ class ProblemCard(BaseModel):
     bot_score: float
     source_mix: SourceMix = Field(default_factory=SourceMix)
     evidence: list[TopicEvidence]
+    timeline: list[ProblemTimelineEvent] = Field(default_factory=list)
     first_seen: datetime
     last_seen: datetime
 

@@ -26,6 +26,9 @@ def test_api_seed_and_top_issues(tmp_path: Path) -> None:
     assert cards_payload["items"]
     assert "urgency" in cards_payload["items"][0]
     assert "source_mix" in cards_payload["items"][0]
+    assert "trend" in cards_payload["items"][0]
+    assert "confidence" in cards_payload["items"][0]
+    assert "timeline" in cards_payload["items"][0]
 
 
 def test_api_manual_import_accepts_csv(tmp_path: Path) -> None:

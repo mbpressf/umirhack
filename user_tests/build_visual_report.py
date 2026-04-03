@@ -202,6 +202,8 @@ def write_summary(cards_payload: dict, source_stats_payload: dict, output_dir: P
     top = cards[0] if cards else None
     contradictions = sum(1 for item in cards if item.get("contradiction_flag"))
     high_urgency = sum(1 for item in cards if item.get("urgency") == "high")
+    average_confidence = round(sum(item.get("confidence", 0) for item in cards) / len(cards), 3) if cards else 0
+    trend_distribution = Counter(item.get("trend", "stable") for item in cards)
     ok_sources = sum(1 for item in source_stats_payload["source_stats"] if item.get("status") == "ok")
     summary = [
         "# Visual Analytics Summary",
@@ -211,6 +213,8 @@ def write_summary(cards_payload: dict, source_stats_payload: dict, output_dir: P
         f"- Карточек проблем: {cards_payload['total_cards']}",
         f"- High urgency: {high_urgency}",
         f"- Тем с противоречием: {contradictions}",
+        f"- Средняя confidence: {average_confidence}",
+        f"- Trend distribution: {dict(trend_distribution)}",
         f"- Источников со статусом ok: {ok_sources}",
     ]
     if top:
@@ -220,8 +224,11 @@ def write_summary(cards_payload: dict, source_stats_payload: dict, output_dir: P
                 "## Топ-1 тема",
                 f"- {top['title']}",
                 f"- Score: {top['score']}",
+                f"- Confidence: {top.get('confidence')}",
                 f"- Sector: {top['sector']}",
                 f"- Status: {top['status']}",
+                f"- Trend: {top.get('trend')}",
+                f"- Verification: {top.get('verification_state')}",
                 f"- Why now: {'; '.join(top['why_now'])}",
             ]
         )
@@ -243,6 +250,10 @@ def write_html_report(cards_payload: dict, top_payload: dict, source_stats_paylo
             f"<li><a href=\"{evidence['url']}\">{evidence['source_name']}</a>: {evidence['snippet']}</li>"
             for evidence in item.get("evidence", [])[:3]
         )
+        timeline_html = "".join(
+            f"<li>{_format_timestamp(point['published_at'])} · {point['signal_kind']} · {point['source_name']}</li>"
+            for point in item.get("timeline", [])[:4]
+        )
         top_3_html.append(
             f"""
             <section class="card">
@@ -250,9 +261,12 @@ def write_html_report(cards_payload: dict, top_payload: dict, source_stats_paylo
               <h3>{item['title']}</h3>
               <p><strong>Сектор:</strong> {item['sector']}</p>
               <p><strong>Статус:</strong> {item['status']}</p>
+              <p><strong>Trend:</strong> {item.get('trend')} · <strong>Confidence:</strong> {item.get('confidence')} · <strong>Verification:</strong> {item.get('verification_state')}</p>
               <p><strong>Муниципалитеты:</strong> {', '.join(item['municipalities'])}</p>
               <p>{item['summary']}</p>
               <p><strong>Почему сейчас:</strong> {'; '.join(item['why_now'])}</p>
+              <p><strong>Timeline:</strong></p>
+              <ul>{timeline_html}</ul>
               <ul>{evidence_html}</ul>
             </section>
             """
@@ -454,6 +468,9 @@ def write_how_it_works(cards_payload: dict, top_payload: dict, raw_events: list[
                       <p><strong>Label:</strong> {escape(topic['label'])}</p>
                       <p><strong>Event count:</strong> {topic['event_count']}</p>
                       <p><strong>Source count:</strong> {topic['source_count']}</p>
+                      <p><strong>Confidence:</strong> {topic.get('confidence')}</p>
+                      <p><strong>Trend:</strong> {escape(topic.get('trend', 'stable'))}</p>
+                      <p><strong>Verification:</strong> {escape(topic.get('verification_state', 'single_source'))}</p>
                       <p><strong>Source mix:</strong> {escape(_format_source_mix(topic.get('source_mix', {})))}</p>
                       <p><strong>Contradiction:</strong> {topic['contradiction_flag']}</p>
                       <p><strong>Bot score:</strong> {topic['bot_score']}</p>
@@ -479,6 +496,9 @@ def write_how_it_works(cards_payload: dict, top_payload: dict, raw_events: list[
                       <h4>Карточка</h4>
                       <p><strong>Urgency:</strong> {escape(card['urgency'])}</p>
                       <p><strong>Status:</strong> {escape(card['status'])}</p>
+                      <p><strong>Trend:</strong> {escape(card.get('trend', 'stable'))}</p>
+                      <p><strong>Confidence:</strong> {card.get('confidence')}</p>
+                      <p><strong>Verification:</strong> {escape(card.get('verification_state', 'single_source'))}</p>
                       <p><strong>Summary:</strong> {escape(card['summary'])}</p>
                     </div>
                     <div class="info-box">

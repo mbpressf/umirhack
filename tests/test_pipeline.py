@@ -92,6 +92,11 @@ def test_problem_cards_are_frontend_ready(tmp_path: Path) -> None:
     assert first.rank == 1
     assert first.why_now
     assert first.key_facts
+    assert first.primary_municipality
+    assert first.trend in {"rising", "stable", "mixed", "resolving", "escalating"}
+    assert 0 <= first.confidence <= 1
+    assert first.verification_state
+    assert first.timeline
     assert first.source_mix.social + first.source_mix.media + first.source_mix.official >= 1
 
 
@@ -139,3 +144,51 @@ def test_cross_source_variants_collapse_into_single_topic(tmp_path: Path) -> Non
     matching = [item for item in topics if "малиновского" in item.topic.neutral_summary.lower() or "малиновского" in item.topic.label.lower()]
     assert matching
     assert matching[0].topic.event_count == 3
+
+
+def test_unrelated_same_day_posts_do_not_merge_into_single_topic(tmp_path: Path) -> None:
+    service = build_service(tmp_path)
+    service.db.upsert_events(
+        [
+            RawEvent(
+                event_id="unrelated-1",
+                url="https://demo.local/unrelated-1",
+                source_type="media",
+                source_name="Новости города",
+                published_at=datetime.fromisoformat("2026-04-03T10:00:00+03:00"),
+                title="В Ростове задержали сбежавшего из колонии заключенного",
+                text="В Ростовской области задержали заключенного, который ранее сбежал из колонии.",
+                municipality="Ростов-на-Дону",
+                is_official=False,
+            ),
+            RawEvent(
+                event_id="unrelated-2",
+                url="https://demo.local/unrelated-2",
+                source_type="official",
+                source_name="Администрация города",
+                published_at=datetime.fromisoformat("2026-04-03T10:20:00+03:00"),
+                title="В Ростове стартовал форум молодых инженеров",
+                text="В Ростове-на-Дону стартовал форум молодых инженеров и разработчиков на площадке ДГТУ.",
+                municipality="Ростов-на-Дону",
+                is_official=True,
+            ),
+            RawEvent(
+                event_id="unrelated-3",
+                url="https://demo.local/unrelated-3",
+                source_type="social",
+                source_name="VK / Городской паблик",
+                published_at=datetime.fromisoformat("2026-04-03T10:40:00+03:00"),
+                title="Жители жалуются на запах гари на Северном",
+                text="Жители Северного района Ростова жалуются на сильный запах гари и дым во дворе.",
+                municipality="Ростов-на-Дону",
+                is_official=False,
+            ),
+        ]
+    )
+
+    clusters = service.analytics._build_clusters(service.db.fetch_events())
+    labels = {service.analytics._cluster_to_topic(cluster).label for cluster in clusters}
+
+    assert any("задержали" in label.lower() for label in labels)
+    assert any("форум" in label.lower() for label in labels)
+    assert any("запах гари" in label.lower() for label in labels)
