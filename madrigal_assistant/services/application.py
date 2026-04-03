@@ -11,7 +11,7 @@ from typing import Any
 
 from madrigal_assistant.analytics import AnalyticsService
 from madrigal_assistant.ingest import IngestionService
-from madrigal_assistant.models import ImportSeedResponse, IngestRunResult, RawEvent, RawEventsResponse, TopIssuesResponse, TopicSummary, TrendsResponse
+from madrigal_assistant.models import ImportSeedResponse, IngestRunResult, ProblemCardsResponse, RawEvent, RawEventsResponse, TopIssuesResponse, TopicSummary, TrendsResponse
 from madrigal_assistant.settings import get_config_path, get_db_path, get_seed_path, load_region_config
 from madrigal_assistant.storage import Database
 from madrigal_assistant.text import stable_event_id
@@ -61,6 +61,18 @@ class RegionalPulseService:
     ) -> TopIssuesResponse:
         events = self.db.fetch_events(start=start, end=end, source_type=source_type)
         return self.analytics.build_top_issues(events, start, end, sector, municipality, source_type, limit)
+
+    def get_problem_cards(
+        self,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        sector: str | None = None,
+        municipality: str | None = None,
+        source_type: str | None = None,
+        limit: int = 10,
+    ) -> ProblemCardsResponse:
+        events = self.db.fetch_events(start=start, end=end, source_type=source_type)
+        return self.analytics.build_problem_cards(events, start, end, sector, municipality, source_type, limit)
 
     def get_topic(
         self,

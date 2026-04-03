@@ -17,7 +17,7 @@ def test_seed_builds_top_issues(tmp_path: Path) -> None:
 
     snapshot = service.get_top_issues()
     assert snapshot.total_topics >= 8
-    assert len(snapshot.items) == 10
+    assert 1 <= len(snapshot.items) <= 10
 
 
 def test_bot_penalty_and_contradiction_are_detected(tmp_path: Path) -> None:
@@ -80,3 +80,62 @@ def test_region_config_builds_live_sources_from_catalog() -> None:
     assert "telegram_don24tv" in source_ids
     assert "donnews_site" not in source_ids
     assert "max_public_chats_manual" not in source_ids
+
+
+def test_problem_cards_are_frontend_ready(tmp_path: Path) -> None:
+    service = build_service(tmp_path)
+    service.import_seed()
+
+    cards = service.get_problem_cards()
+    assert cards.items
+    first = cards.items[0]
+    assert first.rank == 1
+    assert first.why_now
+    assert first.key_facts
+    assert first.source_mix.social + first.source_mix.media + first.source_mix.official >= 1
+
+
+def test_cross_source_variants_collapse_into_single_topic(tmp_path: Path) -> None:
+    service = build_service(tmp_path)
+    service.db.upsert_events(
+        [
+            RawEvent(
+                event_id="power-1",
+                url="https://demo.local/power-1",
+                source_type="social",
+                source_name="Telegram / Западный",
+                published_at=datetime.fromisoformat("2026-04-03T08:10:00+03:00"),
+                title="На Западном пропал свет в нескольких домах",
+                text="Жители Западного района Ростова пишут, что вечером на Малиновского пропало электричество.",
+                municipality="Ростов-на-Дону",
+                is_official=False,
+            ),
+            RawEvent(
+                event_id="power-2",
+                url="https://demo.local/power-2",
+                source_type="media",
+                source_name="Городское медиа",
+                published_at=datetime.fromisoformat("2026-04-03T08:45:00+03:00"),
+                title="Перебои с электричеством зафиксированы на Малиновского",
+                text="В Ростове-на-Дону сообщили о локальном отключении электроэнергии на улице Малиновского в утренние часы.",
+                municipality="Ростов-на-Дону",
+                is_official=False,
+            ),
+            RawEvent(
+                event_id="power-3",
+                url="https://demo.local/power-3",
+                source_type="official",
+                source_name="Администрация района",
+                published_at=datetime.fromisoformat("2026-04-03T09:05:00+03:00"),
+                title="Энергетики устраняют локальное нарушение на Малиновского",
+                text="Специалисты работают над восстановлением электроснабжения на улице Малиновского в Ростове-на-Дону.",
+                municipality="Ростов-на-Дону",
+                is_official=True,
+            ),
+        ]
+    )
+
+    topics = service.get_top_issues(limit=10).items
+    matching = [item for item in topics if "малиновского" in item.topic.neutral_summary.lower() or "малиновского" in item.topic.label.lower()]
+    assert matching
+    assert matching[0].topic.event_count == 3

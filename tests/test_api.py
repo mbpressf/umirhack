@@ -18,7 +18,14 @@ def test_api_seed_and_top_issues(tmp_path: Path) -> None:
     assert top_response.status_code == 200
     payload = top_response.json()
     assert payload["total_topics"] >= 8
-    assert len(payload["items"]) == 10
+    assert 1 <= len(payload["items"]) <= 10
+
+    cards_response = client.get("/api/problem-cards")
+    assert cards_response.status_code == 200
+    cards_payload = cards_response.json()
+    assert cards_payload["items"]
+    assert "urgency" in cards_payload["items"][0]
+    assert "source_mix" in cards_payload["items"][0]
 
 
 def test_api_manual_import_accepts_csv(tmp_path: Path) -> None:

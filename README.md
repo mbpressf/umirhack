@@ -209,6 +209,7 @@ python -m venv .venv
 Главные файлы:
 - [D:/umirhack/datasets/rostov/raw/latest_raw_events.jsonl](D:/umirhack/datasets/rostov/raw/latest_raw_events.jsonl)
 - [D:/umirhack/datasets/rostov/raw/latest_top_issues.json](D:/umirhack/datasets/rostov/raw/latest_top_issues.json)
+- [D:/umirhack/datasets/rostov/raw/latest_problem_cards.json](D:/umirhack/datasets/rostov/raw/latest_problem_cards.json)
 - [D:/umirhack/datasets/rostov/raw/latest_source_stats.json](D:/umirhack/datasets/rostov/raw/latest_source_stats.json)
 - [D:/umirhack/datasets/rostov/raw/latest_manual_imports.json](D:/umirhack/datasets/rostov/raw/latest_manual_imports.json)
 - [D:/umirhack/datasets/rostov/briefings/latest_briefing.md](D:/umirhack/datasets/rostov/briefings/latest_briefing.md)
@@ -271,6 +272,7 @@ Manual import нужен для ситуаций, когда:
 
 Если фронт хочет брать уже готовый файл, то главный вход сейчас:
 - [D:/umirhack/datasets/rostov/raw/latest_top_issues.json](D:/umirhack/datasets/rostov/raw/latest_top_issues.json)
+- [D:/umirhack/datasets/rostov/raw/latest_problem_cards.json](D:/umirhack/datasets/rostov/raw/latest_problem_cards.json)
 
 ## Что мы делаем дальше
 

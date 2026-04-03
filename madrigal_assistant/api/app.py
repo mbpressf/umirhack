@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse
 
-from madrigal_assistant.models import ImportSeedResponse, IngestRequest, IngestRunResult, RawEventsResponse, TopIssuesResponse, TopicSummary, TrendsResponse
+from madrigal_assistant.models import ImportSeedResponse, IngestRequest, IngestRunResult, ProblemCardsResponse, RawEventsResponse, TopIssuesResponse, TopicSummary, TrendsResponse
 from madrigal_assistant.services import RegionalPulseService
 
 
@@ -45,6 +45,24 @@ def create_app(service: RegionalPulseService | None = None) -> FastAPI:
         limit: int = 10,
     ) -> TopIssuesResponse:
         return api_service.get_top_issues(
+            start=_parse_optional_datetime(from_),
+            end=_parse_optional_datetime(to),
+            sector=sector,
+            municipality=municipality,
+            source_type=source_type,
+            limit=limit,
+        )
+
+    @app.get("/api/problem-cards", response_model=ProblemCardsResponse)
+    def problem_cards(
+        from_: Annotated[str | None, Query(alias="from")] = None,
+        to: str | None = None,
+        sector: str | None = None,
+        municipality: str | None = None,
+        source_type: str | None = None,
+        limit: int = 10,
+    ) -> ProblemCardsResponse:
+        return api_service.get_problem_cards(
             start=_parse_optional_datetime(from_),
             end=_parse_optional_datetime(to),
             sector=sector,

@@ -7,8 +7,11 @@ from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 
 from madrigal_assistant.models import (
+    ProblemCard,
+    ProblemCardsResponse,
     RawEvent,
     ScoreBreakdown,
+    SourceMix,
     TopicEvidence,
     TopicSummary,
     TopIssue,
@@ -43,6 +46,35 @@ SEVERITY_BY_SECTOR = {
 COMPLAINT_MARKERS = {"жалоб", "проблем", "очеред", "авар", "запах", "перебо", "срыв", "задерж", "отключ", "холод"}
 RESOLUTION_MARKERS = {"восстанов", "устран", "нормализ", "открыли", "заверш", "опроверг", "усилили"}
 BENIGN_MARKERS = {"форум", "хакатон", "конкурс", "наград", "побед", "турнир", "праздник", "литурги", "отборочн", "встретил", "выступил", "мероприят"}
+ANCHOR_EXCLUDE = {
+    "жители",
+    "житель",
+    "сообщили",
+    "сообщает",
+    "рассказали",
+    "говорят",
+    "пишут",
+    "пишет",
+    "ростовской",
+    "области",
+    "ростова",
+    "ростове",
+    "обновление",
+    "официального",
+    "официальные",
+    "пользователи",
+    "пользователь",
+    "сегодня",
+    "после",
+    "часть",
+    "несколько",
+    "кварталах",
+    "домов",
+    "районе",
+    "улице",
+    "улица",
+    "городе",
+}
 
 
 @dataclass
@@ -51,6 +83,7 @@ class EnrichedEvent:
     combined_text: str
     normalized_text: str
     tokens: set[str]
+    anchor_tokens: set[str]
     sector: str
     municipality: str
     issue_score: float
@@ -63,14 +96,25 @@ class TopicCluster:
     municipalities: set[str] = field(default_factory=set)
     label: str = ""
     key_terms: set[str] = field(default_factory=set)
+    anchor_terms: set[str] = field(default_factory=set)
     topic_id: str = ""
 
     def add(self, event: EnrichedEvent) -> None:
         self.events.append(event)
         self.sector = _majority_value([item.sector for item in self.events])
         self.municipalities = {item.municipality for item in self.events if item.municipality} or {"unknown"}
-        self.label = next((item.raw.title for item in self.events if item.raw.title), shorten(self.events[0].combined_text, 90))
+        best_label_event = max(
+            self.events,
+            key=lambda item: (
+                item.issue_score,
+                1 if item.raw.is_official else 0,
+                len(item.raw.title or ""),
+            ),
+        )
+        self.label = best_label_event.raw.title or shorten(best_label_event.combined_text, 90)
         self.key_terms = set(top_keywords([item.combined_text for item in self.events], limit=6))
+        anchor_counter = Counter(token for item in self.events for token in item.anchor_tokens)
+        self.anchor_terms = {token for token, _ in anchor_counter.most_common(5)}
         digest = hashlib.sha1(f"{self.label}|{self.sector}|{'|'.join(sorted(self.municipalities))}".encode("utf-8")).hexdigest()
         self.topic_id = digest[:12]
 
@@ -118,6 +162,24 @@ class AnalyticsService:
         filtered = self._filter_events(events, start, end, sector, municipality, source_type)
         topics = self._finalize_topics(self._build_clusters(filtered))
         return {topic.topic_id: topic for topic in topics}
+
+    def build_problem_cards(
+        self,
+        events: list[RawEvent],
+        start: datetime | None = None,
+        end: datetime | None = None,
+        sector: str | None = None,
+        municipality: str | None = None,
+        source_type: str | None = None,
+        limit: int = 10,
+    ) -> ProblemCardsResponse:
+        top_issues = self.build_top_issues(events, start, end, sector, municipality, source_type, limit)
+        return ProblemCardsResponse(
+            generated_at=top_issues.generated_at,
+            region=top_issues.region,
+            total_cards=top_issues.total_topics,
+            items=[self._topic_to_problem_card(item) for item in top_issues.items],
+        )
 
     def build_trends(
         self,
@@ -198,6 +260,7 @@ class AnalyticsService:
             combined_text=combined_text,
             normalized_text=normalize_text(combined_text),
             tokens=set(tokenize(combined_text)),
+            anchor_tokens=self._extract_anchor_tokens(combined_text),
             sector=self._classify_sector(event),
             municipality=event.municipality or self._extract_municipality(combined_text),
             issue_score=self._score_issue_relevance(event),
@@ -243,6 +306,10 @@ class AnalyticsService:
         shared_tokens = len(event.tokens & (cluster.key_terms or representative.tokens))
         union = len(event.tokens | representative.tokens) or 1
         jaccard = shared_tokens / union
+        anchor_pool = cluster.anchor_terms or representative.anchor_tokens
+        anchor_overlap = len(event.anchor_tokens & anchor_pool)
+        anchor_norm = max(len(event.anchor_tokens), len(anchor_pool), 1)
+        anchor_score = anchor_overlap / anchor_norm
         seq_ratio = SequenceMatcher(None, event.normalized_text[:250], representative.normalized_text[:250]).ratio()
         title_ratio = 0.0
         if event.raw.title and representative.raw.title:
@@ -250,24 +317,34 @@ class AnalyticsService:
         same_sector = 0.12 if event.sector == cluster.sector else 0.0
         same_municipality = 0.12 if event.municipality in cluster.municipalities and event.municipality != "unknown" else 0.0
         shared_signal_bonus = 0.08 if shared_tokens >= 2 else 0.0
+        anchor_bonus = 0.14 if anchor_overlap >= 1 and same_sector and same_municipality else 0.0
         official_update_bonus = 0.1 if (
             same_sector
             and same_municipality
             and (event.raw.is_official or representative.raw.is_official)
-            and shared_tokens >= 1
+            and (shared_tokens >= 1 or anchor_overlap >= 1)
         ) else 0.0
         time_gap_hours = abs((event.raw.published_at - representative.raw.published_at).total_seconds()) / 3600
         time_bonus = 0.08 if time_gap_hours <= 72 else 0.0
+        same_pattern_bonus = 0.08 if (
+            time_gap_hours <= 48
+            and event.sector == cluster.sector
+            and event.municipality in cluster.municipalities
+            and (anchor_overlap >= 1 or shared_tokens >= 3)
+        ) else 0.0
         return min(
             1.0,
             0.28 * seq_ratio
             + 0.3 * title_ratio
             + 0.22 * jaccard
+            + 0.1 * anchor_score
             + same_sector
             + same_municipality
             + shared_signal_bonus
+            + anchor_bonus
             + official_update_bonus
-            + time_bonus,
+            + time_bonus
+            + same_pattern_bonus
         )
 
     def _finalize_topics(self, clusters: list[TopicCluster]) -> list[TopicSummary]:
@@ -321,6 +398,16 @@ class AnalyticsService:
             score_breakdown=score_breakdown,
             why_in_top=self._build_why_in_top(score_breakdown, cluster, contradiction_flag),
             sources=sorted({item.raw.source_name for item in cluster.events}),
+            source_mix=self._build_source_mix(cluster),
+        )
+
+    def _build_source_mix(self, cluster: TopicCluster) -> SourceMix:
+        counts = Counter(item.raw.source_type for item in cluster.events)
+        return SourceMix(
+            official=counts.get("official", 0),
+            media=counts.get("media", 0),
+            social=counts.get("social", 0),
+            other=sum(value for key, value in counts.items() if key not in {"official", "media", "social"}),
         )
 
     def _calculate_score(self, cluster: TopicCluster, bot_score: float) -> ScoreBreakdown:
@@ -400,3 +487,50 @@ class AnalyticsService:
             f"по теме «{cluster.label}» зафиксировано {len(cluster.events)} сообщений из {len(sources)} источников. "
             f"География: {', '.join(municipalities)}. Основные факты: {facts} {official_presence}{contradiction_note}"
         )
+
+    def _topic_to_problem_card(self, issue: TopIssue) -> ProblemCard:
+        topic = issue.topic
+        latest_official = next((item.snippet for item in topic.evidence if item.is_official), None)
+        latest_citizen = next((item.snippet for item in topic.evidence if not item.is_official), None)
+        urgency = "high" if (topic.score or 0) >= 55 or topic.contradiction_flag else "medium" if (topic.score or 0) >= 40 else "watch"
+        status = "mixed_signal" if topic.contradiction_flag else "official_response" if topic.source_mix.official else "citizen_escalation" if topic.source_mix.social >= 2 else "monitoring"
+        key_facts = []
+        seen_facts: set[str] = set()
+        for item in topic.evidence:
+            fact = item.snippet.strip()
+            if not fact or fact in seen_facts:
+                continue
+            seen_facts.add(fact)
+            key_facts.append(fact)
+            if len(key_facts) >= 3:
+                break
+        return ProblemCard(
+            topic_id=topic.topic_id,
+            rank=issue.rank,
+            title=topic.label,
+            sector=topic.sector,
+            municipalities=topic.municipalities,
+            score=topic.score,
+            urgency=urgency,
+            status=status,
+            summary=topic.neutral_summary,
+            why_now=topic.why_in_top,
+            key_facts=key_facts,
+            latest_official_update=latest_official,
+            latest_citizen_signal=latest_citizen,
+            contradiction_flag=topic.contradiction_flag,
+            bot_score=topic.bot_score,
+            source_mix=topic.source_mix,
+            evidence=topic.evidence[:4],
+            first_seen=topic.first_seen,
+            last_seen=topic.last_seen,
+        )
+
+    def _extract_anchor_tokens(self, text: str) -> set[str]:
+        anchors: set[str] = set()
+        for token in tokenize(text):
+            if token in ANCHOR_EXCLUDE:
+                continue
+            if len(token) >= 5 or any(char.isdigit() for char in token):
+                anchors.add(token)
+        return anchors

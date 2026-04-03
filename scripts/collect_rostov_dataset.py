@@ -117,18 +117,22 @@ def main() -> None:
     ingest_result = service.run_ingest(max_per_source=args.max_per_source)
     raw_events = service.get_raw_events()
     top_issues = service.get_top_issues(limit=10)
+    problem_cards = service.get_problem_cards(limit=10)
     agent = MonitoringAgent(service.region_config["region_name"], source_catalog_path=Path(args.catalog))
     briefing = agent.build_briefing(top_issues, raw_events.items, ingest_result.source_stats)
     briefing_md = agent.to_markdown(briefing)
 
     raw_rows = [item.model_dump(mode="json") for item in raw_events.items]
     top_payload = top_issues.model_dump(mode="json")
+    problem_cards_payload = problem_cards.model_dump(mode="json")
     ingest_payload = ingest_result.model_dump(mode="json")
 
     raw_timestamped = raw_dir / f"raw_events_{timestamp}.jsonl"
     raw_latest = raw_dir / "latest_raw_events.jsonl"
     top_timestamped = raw_dir / f"top_issues_{timestamp}.json"
     top_latest = raw_dir / "latest_top_issues.json"
+    problem_cards_timestamped = raw_dir / f"problem_cards_{timestamp}.json"
+    problem_cards_latest = raw_dir / "latest_problem_cards.json"
     stats_timestamped = raw_dir / f"source_stats_{timestamp}.json"
     stats_latest = raw_dir / "latest_source_stats.json"
     manual_timestamped = raw_dir / f"manual_imports_{timestamp}.json"
@@ -142,6 +146,8 @@ def main() -> None:
     write_jsonl(raw_latest, raw_rows)
     write_json(top_timestamped, top_payload)
     write_json(top_latest, top_payload)
+    write_json(problem_cards_timestamped, problem_cards_payload)
+    write_json(problem_cards_latest, problem_cards_payload)
     write_json(stats_timestamped, ingest_payload)
     write_json(stats_latest, ingest_payload)
     write_json(manual_timestamped, manual_results)
@@ -160,6 +166,7 @@ def main() -> None:
         {
             "raw_events": len(raw_rows),
             "top_issues": len(top_issues.items),
+            "problem_cards": len(problem_cards.items),
             "inserted": ingest_result.inserted,
             "updated": ingest_result.updated,
             "manual_files": len(manual_results),

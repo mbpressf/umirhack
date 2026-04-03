@@ -81,6 +81,13 @@ class ScoreBreakdown(BaseModel):
     bot_penalty: float
 
 
+class SourceMix(BaseModel):
+    official: int = 0
+    media: int = 0
+    social: int = 0
+    other: int = 0
+
+
 class TopicSummary(BaseModel):
     topic_id: str
     label: str
@@ -99,6 +106,7 @@ class TopicSummary(BaseModel):
     score_breakdown: ScoreBreakdown | None = None
     why_in_top: list[str] = Field(default_factory=list)
     sources: list[str] = Field(default_factory=list)
+    source_mix: SourceMix = Field(default_factory=SourceMix)
 
 
 class TopIssue(BaseModel):
@@ -111,6 +119,35 @@ class TopIssuesResponse(BaseModel):
     region: str
     total_topics: int
     items: list[TopIssue]
+
+
+class ProblemCard(BaseModel):
+    topic_id: str
+    rank: int
+    title: str
+    sector: str
+    municipalities: list[str]
+    score: float | None = None
+    urgency: str
+    status: str
+    summary: str
+    why_now: list[str] = Field(default_factory=list)
+    key_facts: list[str] = Field(default_factory=list)
+    latest_official_update: str | None = None
+    latest_citizen_signal: str | None = None
+    contradiction_flag: bool
+    bot_score: float
+    source_mix: SourceMix = Field(default_factory=SourceMix)
+    evidence: list[TopicEvidence]
+    first_seen: datetime
+    last_seen: datetime
+
+
+class ProblemCardsResponse(BaseModel):
+    generated_at: datetime
+    region: str
+    total_cards: int
+    items: list[ProblemCard]
 
 
 class TrendPoint(BaseModel):
