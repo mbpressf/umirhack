@@ -87,6 +87,13 @@ def setup_matplotlib() -> None:
     plt.rcParams["axes.titleweight"] = "bold"
 
 
+def detect_analysis_window(raw_events: list[dict]) -> tuple[str, str]:
+    if not raw_events:
+        return ("n/a", "n/a")
+    timestamps = sorted(item["published_at"] for item in raw_events if item.get("published_at"))
+    return (_format_timestamp(timestamps[0]), _format_timestamp(timestamps[-1]))
+
+
 def save_top_scores(cards: list[dict], output_dir: Path) -> None:
     labels = [f"#{item['rank']} {item['title'][:34]}" for item in cards[:10]]
     scores = [item.get("score") or 0 for item in cards[:10]]
@@ -197,8 +204,9 @@ def save_source_health(source_stats: list[dict], output_dir: Path) -> None:
     plt.close(fig)
 
 
-def write_summary(cards_payload: dict, source_stats_payload: dict, output_dir: Path) -> None:
+def write_summary(cards_payload: dict, source_stats_payload: dict, raw_events: list[dict], output_dir: Path) -> None:
     cards = cards_payload["items"]
+    window_start, window_end = detect_analysis_window(raw_events)
     top = cards[0] if cards else None
     contradictions = sum(1 for item in cards if item.get("contradiction_flag"))
     high_urgency = sum(1 for item in cards if item.get("urgency") == "high")
@@ -210,6 +218,7 @@ def write_summary(cards_payload: dict, source_stats_payload: dict, output_dir: P
         "",
         f"- Регион: {cards_payload['region']}",
         f"- Сгенерировано: {cards_payload['generated_at']}",
+        f"- Окно анализа: {window_start} -> {window_end}",
         f"- Карточек проблем: {cards_payload['total_cards']}",
         f"- High urgency: {high_urgency}",
         f"- Тем с противоречием: {contradictions}",
@@ -235,8 +244,9 @@ def write_summary(cards_payload: dict, source_stats_payload: dict, output_dir: P
     (output_dir / "summary.md").write_text("\n".join(summary), encoding="utf-8")
 
 
-def write_html_report(cards_payload: dict, top_payload: dict, source_stats_payload: dict, output_dir: Path) -> None:
+def write_html_report(cards_payload: dict, top_payload: dict, source_stats_payload: dict, raw_events: list[dict], output_dir: Path) -> None:
     cards = cards_payload["items"]
+    window_start, window_end = detect_analysis_window(raw_events)
     image_sources = {
         "top_scores": embed_png(output_dir / "top_scores.png"),
         "sector_distribution": embed_png(output_dir / "sector_distribution.png"),
@@ -348,6 +358,7 @@ def write_html_report(cards_payload: dict, top_payload: dict, source_stats_paylo
           <h1>Visual Analytics Check</h1>
           <p><strong>Регион:</strong> {cards_payload['region']}</p>
           <p><strong>Сгенерировано:</strong> {cards_payload['generated_at']}</p>
+          <p><strong>Окно анализа:</strong> {window_start} -> {window_end}</p>
           <p><strong>Карточек:</strong> {cards_payload['total_cards']} · <strong>Тем в top issues:</strong> {top_payload['total_topics']} · <strong>Источников в отчёте:</strong> {len(source_stats_payload['source_stats'])}</p>
           <p>Это визуальная ручная проверка. Здесь можно быстро увидеть, что аналитика реально работает: как ранжируются темы, как распределяются сектора, где есть риск аномалий и как отработали источники.</p>
           <p><strong>Как читать:</strong> сначала посмотрите <code>Top проблем по score</code>, потом <code>Source mix</code>, потом <code>Score vs Bot score</code>, а ниже уже откройте карточки первых тем.</p>
@@ -660,8 +671,8 @@ def main() -> None:
     save_source_mix(cards, run_dir)
     save_bot_vs_score(cards, run_dir)
     save_source_health(source_stats, run_dir)
-    write_summary(cards_payload, source_stats_payload, run_dir)
-    write_html_report(cards_payload, top_payload, source_stats_payload, run_dir)
+    write_summary(cards_payload, source_stats_payload, raw_events, run_dir)
+    write_html_report(cards_payload, top_payload, source_stats_payload, raw_events, run_dir)
     write_how_it_works(cards_payload, top_payload, raw_events, run_dir)
     bundle_path = create_share_bundle(run_dir)
     shareable_dir = publish_shareable(run_dir)

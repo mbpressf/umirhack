@@ -4,7 +4,7 @@ import argparse
 import csv
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, time, timedelta
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -81,6 +81,20 @@ def discover_manual_inputs(manual_dir: Path, explicit_inputs: list[str]) -> list
     return unique_paths
 
 
+def resolve_window(from_date: str | None, to_date: str | None, window_hours: int) -> tuple[datetime, datetime]:
+    now = datetime.now().astimezone()
+    if from_date:
+        start = datetime.combine(datetime.fromisoformat(from_date).date(), time.min, tzinfo=now.tzinfo)
+    else:
+        start = now - timedelta(hours=window_hours)
+
+    if to_date:
+        end = datetime.combine(datetime.fromisoformat(to_date).date(), time.max, tzinfo=now.tzinfo)
+    else:
+        end = now
+    return start, end
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Collect Rostov datasets and build briefing artifacts.")
     parser.add_argument("--config", default=str(ROOT_DIR / "config" / "demo_region.rostov.json"))
@@ -90,6 +104,9 @@ def main() -> None:
     parser.add_argument("--manual-dir", default=str(ROOT_DIR / "datasets" / "rostov" / "manual"))
     parser.add_argument("--manual-input", action="append", default=[])
     parser.add_argument("--max-per-source", type=int, default=8)
+    parser.add_argument("--window-hours", type=int, default=72)
+    parser.add_argument("--from-date")
+    parser.add_argument("--to-date")
     parser.add_argument("--include-seed", action="store_true", default=True)
     parser.add_argument("--skip-seed", action="store_true")
     parser.add_argument("--skip-manual", action="store_true")
@@ -115,9 +132,10 @@ def main() -> None:
             manual_results.append({"path": str(manual_path), **result.model_dump()})
 
     ingest_result = service.run_ingest(max_per_source=args.max_per_source)
-    raw_events = service.get_raw_events()
-    top_issues = service.get_top_issues(limit=10)
-    problem_cards = service.get_problem_cards(limit=10)
+    window_start, window_end = resolve_window(args.from_date, args.to_date, args.window_hours)
+    raw_events = service.get_raw_events(start=window_start, end=window_end)
+    top_issues = service.get_top_issues(start=window_start, end=window_end, limit=10)
+    problem_cards = service.get_problem_cards(start=window_start, end=window_end, limit=10)
     agent = MonitoringAgent(service.region_config["region_name"], source_catalog_path=Path(args.catalog))
     briefing = agent.build_briefing(top_issues, raw_events.items, ingest_result.source_stats)
     briefing_md = agent.to_markdown(briefing)
@@ -171,6 +189,9 @@ def main() -> None:
             "updated": ingest_result.updated,
             "manual_files": len(manual_results),
             "manual_imported": sum(item["imported"] for item in manual_results),
+            "window_hours": args.window_hours,
+            "window_start": window_start.isoformat(),
+            "window_end": window_end.isoformat(),
             "output_dir": str(output_dir),
             "briefing_md": str(briefing_latest_md),
         },
