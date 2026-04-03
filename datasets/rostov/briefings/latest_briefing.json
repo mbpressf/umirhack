@@ -1,0 +1,309 @@
+{
+  "generated_at": "2026-04-03T21:56:28.546131+03:00",
+  "region": "Ростовская область",
+  "executive_summary": "По Ростовская область сейчас в топе 10 тем. Наиболее заметная сфера: ЖКХ. Официальных сигналов: 17, пользовательских сообщений: 54.",
+  "urgent_topics": [
+    {
+      "rank": 1,
+      "topic_id": "613bbb9dd8e8",
+      "label": "В части Батайска пропало электричество",
+      "sector": "ЖКХ",
+      "municipalities": [
+        "Батайск"
+      ],
+      "score": 60.16,
+      "why_in_top": [
+        "есть всплеск сообщений за последние 24 часа",
+        "тема подтверждается несколькими независимыми источниками",
+        "по теме есть официальный сигнал",
+        "есть расхождение между официальным обновлением и пользовательскими сообщениями"
+      ],
+      "bot_score": 0.15,
+      "contradiction_flag": true,
+      "source_count": 3
+    },
+    {
+      "rank": 2,
+      "topic_id": "b1995774911c",
+      "label": "Жители Таганрога жалуются на очереди в поликлинике №2",
+      "sector": "Здравоохранение",
+      "municipalities": [
+        "Таганрог"
+      ],
+      "score": 57.75,
+      "why_in_top": [
+        "есть всплеск сообщений за последние 24 часа",
+        "тема подтверждается несколькими независимыми источниками",
+        "по теме есть официальный сигнал",
+        "есть расхождение между официальным обновлением и пользовательскими сообщениями"
+      ],
+      "bot_score": 0.15,
+      "contradiction_flag": true,
+      "source_count": 4
+    },
+    {
+      "rank": 3,
+      "topic_id": "a730ee1af6bd",
+      "label": "Жители Новочеркасска пожаловались на запах гари утром во вторник",
+      "sector": "Экология и ЧС",
+      "municipalities": [
+        "Новочеркасск"
+      ],
+      "score": 52.98,
+      "why_in_top": [
+        "есть всплеск сообщений за последние 24 часа",
+        "тема подтверждается несколькими независимыми источниками",
+        "по теме есть официальный сигнал"
+      ],
+      "bot_score": 0.0,
+      "contradiction_flag": false,
+      "source_count": 3
+    },
+    {
+      "rank": 4,
+      "topic_id": "164c7b75231a",
+      "label": "Жители Волгодонска сообщили о сбое электронной записи в МФЦ",
+      "sector": "Госуслуги и сервисы",
+      "municipalities": [
+        "Волгодонск"
+      ],
+      "score": 41.72,
+      "why_in_top": [
+        "есть всплеск сообщений за последние 24 часа"
+      ],
+      "bot_score": 0.0,
+      "contradiction_flag": false,
+      "source_count": 2
+    },
+    {
+      "rank": 5,
+      "topic_id": "d57a6f7769ae",
+      "label": "Жители Западного в Ростове-на-Дону сообщили о слабом отоплении",
+      "sector": "ЖКХ",
+      "municipalities": [
+        "Ростов-на-Дону"
+      ],
+      "score": 39.85,
+      "why_in_top": [
+        "есть всплеск сообщений за последние 24 часа",
+        "тема подтверждается несколькими независимыми источниками",
+        "по теме есть официальный сигнал",
+        "есть расхождение между официальным обновлением и пользовательскими сообщениями"
+      ],
+      "bot_score": 0.0,
+      "contradiction_flag": true,
+      "source_count": 3
+    }
+  ],
+  "sector_distribution": {
+    "ЖКХ": 4,
+    "Здравоохранение": 1,
+    "Экология и ЧС": 1,
+    "Госуслуги и сервисы": 1,
+    "Дороги и транспорт": 2,
+    "Образование": 1
+  },
+  "contradictions": [
+    {
+      "rank": 1,
+      "label": "В части Батайска пропало электричество",
+      "municipalities": [
+        "Батайск"
+      ],
+      "sources": [
+        "Telegram / Батайск район",
+        "Telegram / Правительство Ростовской области",
+        "VK / Батайск Онлайн"
+      ]
+    },
+    {
+      "rank": 2,
+      "label": "Жители Таганрога жалуются на очереди в поликлинике №2",
+      "municipalities": [
+        "Таганрог"
+      ],
+      "sources": [
+        "Telegram / Таганрог Новости",
+        "VK / Таганрог Онлайн",
+        "ДОН 24",
+        "Минздрав Ростовской области"
+      ]
+    },
+    {
+      "rank": 5,
+      "label": "Жители Западного в Ростове-на-Дону сообщили о слабом отоплении",
+      "municipalities": [
+        "Ростов-на-Дону"
+      ],
+      "sources": [
+        "Telegram / Администрация Ростова-на-Дону",
+        "Telegram / Ростов Главный",
+        "ДОН 24"
+      ]
+    },
+    {
+      "rank": 6,
+      "label": "На Малиновского в Ростове утром произошло несколько ДТП из-за гололеда",
+      "municipalities": [
+        "Ростов-на-Дону"
+      ],
+      "sources": [
+        "161.RU",
+        "Telegram / Администрация Ростова-на-Дону",
+        "Telegram / ДОН 24",
+        "Telegram / Правительство Ростовской области",
+        "Telegram / Ростов Транспорт"
+      ]
+    }
+  ],
+  "spam_watchlist": [
+    {
+      "rank": 7,
+      "label": "На Пушкинской третий день не вывезли мусор",
+      "bot_score": 0.775
+    }
+  ],
+  "source_health": [
+    {
+      "source_id": "don24_rss",
+      "source_name": "ДОН 24",
+      "status": "error",
+      "scanned": 0,
+      "inserted": 0,
+      "updated": 0,
+      "error": "HTTP Error 403: Forbidden"
+    },
+    {
+      "source_id": "news161_rss",
+      "source_name": "161.RU",
+      "status": "ok",
+      "scanned": 4,
+      "inserted": 4,
+      "updated": 0,
+      "error": null
+    },
+    {
+      "source_id": "donday_rss",
+      "source_name": "DonDay",
+      "status": "ok",
+      "scanned": 4,
+      "inserted": 4,
+      "updated": 0,
+      "error": null
+    },
+    {
+      "source_id": "bloknot_rostov_html",
+      "source_name": "Блокнот Ростов",
+      "status": "ok",
+      "scanned": 4,
+      "inserted": 4,
+      "updated": 0,
+      "error": null
+    },
+    {
+      "source_id": "telegram_don24tv",
+      "source_name": "Telegram / ДОН 24",
+      "status": "ok",
+      "scanned": 4,
+      "inserted": 4,
+      "updated": 0,
+      "error": null
+    },
+    {
+      "source_id": "telegram_news161ru",
+      "source_name": "Telegram / 161.RU",
+      "status": "ok",
+      "scanned": 4,
+      "inserted": 4,
+      "updated": 0,
+      "error": null
+    },
+    {
+      "source_id": "telegram_donnewsru",
+      "source_name": "Telegram / donnews.ru",
+      "status": "ok",
+      "scanned": 4,
+      "inserted": 4,
+      "updated": 0,
+      "error": null
+    },
+    {
+      "source_id": "telegram_rostov_glavniy",
+      "source_name": "Telegram / Ростов Главный",
+      "status": "ok",
+      "scanned": 4,
+      "inserted": 4,
+      "updated": 0,
+      "error": null
+    },
+    {
+      "source_id": "telegram_rostov_city_admin",
+      "source_name": "Telegram / Администрация Ростова-на-Дону",
+      "status": "ok",
+      "scanned": 4,
+      "inserted": 4,
+      "updated": 0,
+      "error": null
+    },
+    {
+      "source_id": "telegram_rostov_region",
+      "source_name": "Telegram / Правительство Ростовской области",
+      "status": "ok",
+      "scanned": 4,
+      "inserted": 4,
+      "updated": 0,
+      "error": null
+    },
+    {
+      "source_id": "telegram_mchs_rostov",
+      "source_name": "Telegram / МЧС Ростовской области",
+      "status": "ok",
+      "scanned": 4,
+      "inserted": 4,
+      "updated": 0,
+      "error": null
+    }
+  ],
+  "next_collection_targets": [
+    {
+      "id": "donnews_site",
+      "name": "donnews.ru",
+      "status": "candidate",
+      "priority": 3,
+      "notes": "Сайт доступен, но потребуется отдельная логика поиска article-links."
+    },
+    {
+      "id": "rostov_city_news_site",
+      "name": "Сайт администрации Ростова-на-Дону / новости",
+      "status": "candidate",
+      "priority": 3,
+      "notes": "Доступ бывает нестабильным, но как официальный источник важен."
+    },
+    {
+      "id": "citizen_portals_manual",
+      "name": "Порталы обращений граждан / выгрузка",
+      "status": "manual",
+      "priority": 3,
+      "notes": "Можно подключить через заранее подготовленную выгрузку в CSV/JSON."
+    },
+    {
+      "id": "max_manual_import",
+      "name": "MAX / публичные районные чаты",
+      "status": "manual",
+      "priority": 4,
+      "notes": "Для хакатона лучше держать как CSV/JSON import adapter."
+    },
+    {
+      "id": "donland_news_site",
+      "name": "donland.ru / новости",
+      "status": "blocked",
+      "priority": 4,
+      "notes": "Сейчас отдаёт 403, нужен отдельный обход или другой публичный канал."
+    }
+  ],
+  "team_handoff": {
+    "frontend": "Показывает top-10, карточку темы, why-in-top, source health и next collection targets.",
+    "data_ml": "Расширяет сбор и улучшает дедупликацию, contradiction-логику, sector rules и bot-penalty.",
+    "backend": "Поднимает jobs для планового ingest, хранение source health и выдачу briefing через API."
+  }
+}

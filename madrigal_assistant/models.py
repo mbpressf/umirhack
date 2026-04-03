@@ -1,0 +1,156 @@
+from __future__ import annotations
+
+import re
+from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, Field, field_validator
+
+
+class SourceDefinition(BaseModel):
+    id: str
+    name: str
+    kind: str
+    fetcher: str
+    url: str
+    max_items: int = 10
+    is_official: bool = False
+    link_regex: str | None = None
+    channel: str | None = None
+
+
+class RawEvent(BaseModel):
+    event_id: str | None = None
+    external_id: str | None = None
+    url: str
+    source_id: str | None = None
+    source_type: str
+    source_name: str
+    region: str = "Ростовская область"
+    published_at: datetime
+    title: str | None = None
+    text: str
+    author: str | None = None
+    municipality: str | None = None
+    engagement: int | None = None
+    is_official: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("source_type")
+    @classmethod
+    def normalize_source_type(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("title", "text")
+    @classmethod
+    def normalize_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        cleaned = re.sub(r"[\U00010000-\U0010ffff]", "", value)
+        cleaned = cleaned.replace("\ufe0f", "")
+        return " ".join(cleaned.split())
+
+
+class TopicEvidence(BaseModel):
+    event_id: str
+    source_name: str
+    source_type: str
+    url: str
+    published_at: datetime
+    snippet: str
+    is_official: bool
+    engagement: int | None = None
+
+
+class ScoreBreakdown(BaseModel):
+    surge: float
+    diversity: float
+    geography: float
+    severity: float
+    official_signal: float
+    citizen_volume: float
+    bot_penalty: float
+
+
+class TopicSummary(BaseModel):
+    topic_id: str
+    label: str
+    sector: str
+    issue_relevance: float = 0.0
+    municipalities: list[str]
+    first_seen: datetime
+    last_seen: datetime
+    event_count: int
+    source_count: int
+    neutral_summary: str
+    evidence: list[TopicEvidence]
+    contradiction_flag: bool
+    bot_score: float
+    score: float | None = None
+    score_breakdown: ScoreBreakdown | None = None
+    why_in_top: list[str] = Field(default_factory=list)
+    sources: list[str] = Field(default_factory=list)
+
+
+class TopIssue(BaseModel):
+    rank: int
+    topic: TopicSummary
+
+
+class TopIssuesResponse(BaseModel):
+    generated_at: datetime
+    region: str
+    total_topics: int
+    items: list[TopIssue]
+
+
+class TrendPoint(BaseModel):
+    bucket_start: datetime
+    value: int
+
+
+class TrendSeries(BaseModel):
+    topic_id: str
+    label: str
+    sector: str
+    points: list[TrendPoint]
+
+
+class TrendsResponse(BaseModel):
+    generated_at: datetime
+    region: str
+    series: list[TrendSeries]
+
+
+class IngestSourceStat(BaseModel):
+    source_id: str
+    source_name: str
+    scanned: int
+    inserted: int
+    updated: int
+    status: str
+    error: str | None = None
+
+
+class IngestRunResult(BaseModel):
+    inserted: int
+    updated: int
+    scanned: int
+    source_stats: list[IngestSourceStat]
+
+
+class ImportSeedResponse(BaseModel):
+    imported: int
+    updated: int
+    source: str
+
+
+class IngestRequest(BaseModel):
+    max_per_source: int = 8
+
+
+class RawEventsResponse(BaseModel):
+    generated_at: datetime
+    region: str
+    total_events: int
+    items: list[RawEvent]

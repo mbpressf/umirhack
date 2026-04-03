@@ -1,0 +1,85 @@
+{
+  "region_name": "Республика Татарстан",
+  "timezone": "Europe/Moscow",
+  "municipalities": [
+    {
+      "name": "Казань",
+      "aliases": ["казань", "kazan", "авиастроительный район", "проспект победы", "московский район"]
+    },
+    {
+      "name": "Набережные Челны",
+      "aliases": ["набережные челны", "челны", "naberezhnye chelny"]
+    },
+    {
+      "name": "Нижнекамск",
+      "aliases": ["нижнекамск", "nizhnekamsk"]
+    },
+    {
+      "name": "Альметьевск",
+      "aliases": ["альметьевск", "almetyevsk"]
+    },
+    {
+      "name": "Зеленодольск",
+      "aliases": ["зеленодольск", "zelenodolsk"]
+    },
+    {
+      "name": "Елабуга",
+      "aliases": ["елабуга", "yelabuga", "elabuga"]
+    },
+    {
+      "name": "Бугульма",
+      "aliases": ["бугульма", "bugulma"]
+    }
+  ],
+  "sources": [
+    {
+      "id": "business_gazeta_rss",
+      "name": "БИЗНЕС Online",
+      "kind": "media",
+      "fetcher": "rss",
+      "url": "https://www.business-gazeta.ru/rss.xml",
+      "max_items": 12,
+      "is_official": false
+    },
+    {
+      "id": "tatar_inform_rss",
+      "name": "Татар-информ",
+      "kind": "media",
+      "fetcher": "rss",
+      "url": "https://tatar-inform.ru/rss",
+      "max_items": 12,
+      "is_official": false
+    },
+    {
+      "id": "official_tatarstan_news",
+      "name": "Официальный Татарстан",
+      "kind": "official",
+      "fetcher": "html",
+      "url": "https://tatarstan.ru/index.htm/news/",
+      "link_regex": "https://tatarstan\\.ru/index\\.htm/news/\\d+\\.htm",
+      "max_items": 8,
+      "is_official": true
+    },
+    {
+      "id": "telegram_tatarstan24",
+      "name": "Telegram / Татарстан-24",
+      "kind": "social",
+      "fetcher": "telegram",
+      "url": "https://t.me/s/Tatarstan24TV",
+      "channel": "Tatarstan24TV",
+      "max_items": 8,
+      "is_official": false
+    },
+    {
+      "id": "telegram_businessgazeta",
+      "name": "Telegram / БИЗНЕС Online",
+      "kind": "social",
+      "fetcher": "telegram",
+      "url": "https://t.me/s/businessgazeta",
+      "channel": "businessgazeta",
+      "max_items": 8,
+      "is_official": false
+    }
+  ]
+}
+

@@ -1,0 +1,148 @@
+{
+  "region_name": "Ростовская область",
+  "timezone": "Europe/Moscow",
+  "municipalities": [
+    {
+      "name": "Ростов-на-Дону",
+      "aliases": ["ростов-на-дону", "ростов на дону", "ростов", "зжм", "сжм", "левенцовка", "сельмаш", "западный"]
+    },
+    {
+      "name": "Батайск",
+      "aliases": ["батайск", "bataisk"]
+    },
+    {
+      "name": "Аксай",
+      "aliases": ["аксай", "aksay"]
+    },
+    {
+      "name": "Таганрог",
+      "aliases": ["таганрог", "taganrog"]
+    },
+    {
+      "name": "Новочеркасск",
+      "aliases": ["новочеркасск", "novocherkassk"]
+    },
+    {
+      "name": "Шахты",
+      "aliases": ["шахты", "shakhty"]
+    },
+    {
+      "name": "Азов",
+      "aliases": ["азов", "azov"]
+    },
+    {
+      "name": "Волгодонск",
+      "aliases": ["волгодонск", "volgodonsk"]
+    }
+  ],
+  "sources": [
+    {
+      "id": "don24_rss",
+      "name": "ДОН 24",
+      "kind": "media",
+      "fetcher": "rss",
+      "url": "https://don24.ru/rss",
+      "max_items": 12,
+      "is_official": false
+    },
+    {
+      "id": "news161_rss",
+      "name": "161.RU",
+      "kind": "media",
+      "fetcher": "rss",
+      "url": "https://161.ru/rss",
+      "max_items": 12,
+      "is_official": false
+    },
+    {
+      "id": "donday_rss",
+      "name": "DonDay",
+      "kind": "media",
+      "fetcher": "rss",
+      "url": "https://donday.ru/rss.xml",
+      "max_items": 12,
+      "is_official": false
+    },
+    {
+      "id": "bloknot_rostov_html",
+      "name": "Блокнот Ростов",
+      "kind": "media",
+      "fetcher": "html",
+      "url": "https://bloknot-rostov.ru/news/",
+      "link_regex": "https://bloknot-rostov\\.ru/news/.+-\\d+",
+      "max_items": 8,
+      "is_official": false
+    },
+    {
+      "id": "telegram_don24tv",
+      "name": "Telegram / ДОН 24",
+      "kind": "social",
+      "fetcher": "telegram",
+      "url": "https://t.me/s/don24tv",
+      "channel": "don24tv",
+      "max_items": 8,
+      "is_official": false
+    },
+    {
+      "id": "telegram_news161ru",
+      "name": "Telegram / 161.RU",
+      "kind": "social",
+      "fetcher": "telegram",
+      "url": "https://t.me/s/news161ru",
+      "channel": "news161ru",
+      "max_items": 8,
+      "is_official": false
+    },
+    {
+      "id": "telegram_donnewsru",
+      "name": "Telegram / donnews.ru",
+      "kind": "social",
+      "fetcher": "telegram",
+      "url": "https://t.me/s/donnewsru",
+      "channel": "donnewsru",
+      "max_items": 8,
+      "is_official": false
+    },
+    {
+      "id": "telegram_rostov_glavniy",
+      "name": "Telegram / Ростов Главный",
+      "kind": "social",
+      "fetcher": "telegram",
+      "url": "https://t.me/s/rostov_glavniy",
+      "channel": "rostov_glavniy",
+      "max_items": 8,
+      "is_official": false
+    },
+    {
+      "id": "telegram_rostov_city_admin",
+      "name": "Telegram / Администрация Ростова-на-Дону",
+      "kind": "official",
+      "fetcher": "telegram",
+      "url": "https://t.me/s/Rostov_Gorod_Admin",
+      "channel": "Rostov_Gorod_Admin",
+      "max_items": 8,
+      "is_official": true
+    },
+    {
+      "id": "telegram_rostov_region",
+      "name": "Telegram / Правительство Ростовской области",
+      "kind": "official",
+      "fetcher": "telegram",
+      "url": "https://t.me/s/RostovRegion",
+      "channel": "RostovRegion",
+      "max_items": 8,
+      "is_official": true
+    },
+    {
+      "id": "telegram_mchs_rostov",
+      "name": "Telegram / МЧС Ростовской области",
+      "kind": "official",
+      "fetcher": "telegram",
+      "url": "https://t.me/s/mchs_rostov",
+      "channel": "mchs_rostov",
+      "max_items": 8,
+      "is_official": true
+    }
+  ]
+}
+

@@ -1,0 +1,17 @@
+id,name,kind,fetcher,url,status,enabled_in_live_config,priority,coverage,notes
+don24_rss,ДОН 24,media,rss,https://don24.ru/rss,stable,True,1,regional_media,"Стабильный RSS, подходит как основной медиа-источник."
+news161_rss,161.RU,media,rss,https://161.ru/rss,stable,True,1,regional_media,"Хороший городской и региональный сигнал, даёт много consumer-жалоб."
+donday_rss,DonDay,media,rss,https://donday.ru/rss.xml,stable,True,1,regional_media,Хороший дополнительный поток по происшествиям и социальной повестке.
+bloknot_rostov_html,Блокнот Ростов,media,html,https://bloknot-rostov.ru/news/,stable,True,2,regional_media,"RSS не найден, но listing page скрапится стабильно."
+telegram_don24tv,Telegram / ДОН 24,social,telegram,https://t.me/s/don24tv,stable,True,1,social_media,"Публичный Telegram-канал, легко снимать в near real-time."
+telegram_news161ru,Telegram / 161.RU,social,telegram,https://t.me/s/news161ru,stable,True,1,social_media,Даёт быстрый поток и реакцию аудитории.
+telegram_donnewsru,Telegram / donnews.ru,social,telegram,https://t.me/s/donnewsru,stable,True,2,social_media,Можно использовать как дополнительный канал к сайту donnews.
+telegram_rostov_glavniy,Telegram / Ростов Главный,social,telegram,https://t.me/s/rostov_glavniy,stable,True,2,citizen_signal,Полезен для пользовательских жалоб и ранних сигналов.
+telegram_rostov_city_admin,Telegram / Администрация Ростова-на-Дону,official,telegram,https://t.me/s/Rostov_Gorod_Admin,stable,True,1,official_signal,Основной официальный канал города для контрсигналов и подтверждений.
+telegram_rostov_region,Telegram / Правительство Ростовской области,official,telegram,https://t.me/s/RostovRegion,stable,True,1,official_signal,Главный региональный официальный сигнал.
+telegram_mchs_rostov,Telegram / МЧС Ростовской области,official,telegram,https://t.me/s/mchs_rostov,stable,True,1,emergency_signal,"Особенно полезен для пожаров, запахов, ЧС и оповещений."
+donnews_site,donnews.ru,media,html,https://donnews.ru/,candidate,False,3,regional_media,"Сайт доступен, но потребуется отдельная логика поиска article-links."
+rostov_city_news_site,Сайт администрации Ростова-на-Дону / новости,official,html,https://rostov-gorod.ru/press_room/news/,candidate,False,3,official_signal,"Доступ бывает нестабильным, но как официальный источник важен."
+donland_news_site,donland.ru / новости,official,html,https://donland.ru/news/,blocked,False,4,official_signal,"Сейчас отдаёт 403, нужен отдельный обход или другой публичный канал."
+max_manual_import,MAX / публичные районные чаты,social,manual_import,manual://max-public-groups,manual,False,4,citizen_signal,Для хакатона лучше держать как CSV/JSON import adapter.
+citizen_portals_manual,Порталы обращений граждан / выгрузка,citizen_portal,manual_import,manual://citizen-portals,manual,False,3,citizen_signal,Можно подключить через заранее подготовленную выгрузку в CSV/JSON.
