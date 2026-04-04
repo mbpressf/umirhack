@@ -46,3 +46,25 @@ def test_api_manual_import_accepts_csv(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     assert response.json()["imported"] == 1
+
+
+def test_api_frontend_snapshot_returns_dashboard_shape(tmp_path: Path) -> None:
+    service = RegionalPulseService(db_path=tmp_path / "api-frontend.db")
+    client = TestClient(create_app(service))
+
+    client.post("/api/import/seed")
+    response = client.get("/api/frontend-snapshot")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["meta"]["regionName"]
+    assert "topProblems" in payload
+    assert "topics" in payload
+    assert "municipalities" in payload
+    assert "trends" in payload
+    assert {"24h", "7d", "30d"} <= set(payload["trends"])
+    if payload["topProblems"]:
+        first = payload["topProblems"][0]
+        assert "whyTop" in first
+        assert "sources" in first
+        assert "factors" in first

@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, PlainTextResponse
 
 from madrigal_assistant.models import ImportSeedResponse, IngestRequest, IngestRunResult, ProblemCardsResponse, RawEventsResponse, SimilarTopicsResponse, TopIssuesResponse, TopicSummary, TrendsResponse
@@ -19,6 +20,13 @@ def _parse_optional_datetime(value: str | None) -> datetime | None:
 def create_app(service: RegionalPulseService | None = None) -> FastAPI:
     api_service = service or RegionalPulseService()
     app = FastAPI(title="Madrigal Regional Pulse API", version="0.1.0")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.get("/health")
     def health() -> dict:
@@ -35,6 +43,10 @@ def create_app(service: RegionalPulseService | None = None) -> FastAPI:
             "embedding_layer": api_service.embedding_layer_status(),
             "filters": api_service.filter_options(),
         }
+
+    @app.get("/api/frontend-snapshot")
+    def frontend_snapshot() -> dict:
+        return api_service.get_frontend_snapshot()
 
     @app.get("/api/top-issues", response_model=TopIssuesResponse)
     def top_issues(

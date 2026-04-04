@@ -1,12 +1,14 @@
 .venv/
+node_modules/
 __pycache__/
 .pytest_cache/
 .streamlit/
 *.pyc
 *.pyo
 *.db
+*.db-shm
+*.db-wal
 *.sqlite3
 *.log
 dist/
 build/
-
