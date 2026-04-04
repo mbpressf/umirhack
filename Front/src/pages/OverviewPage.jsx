@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import Badge, { getPriorityTone } from "../components/common/Badge";
 import LineChart from "../components/common/LineChart";
 
@@ -12,6 +12,7 @@ const KPI_TITLES = [
 export default function OverviewPage({
   data,
   globalSearch,
+  onSearchChange,
   onOpenTopic,
   pilotNotice,
   locale = "ru",
@@ -20,6 +21,33 @@ export default function OverviewPage({
   const [summaryMode, setSummaryMode] = useState("day");
 
   const search = globalSearch.trim().toLowerCase();
+  const overviewSummary = data?.overviewSummary;
+  const daySummary =
+    (typeof overviewSummary === "object" && overviewSummary?.day) ||
+    (typeof overviewSummary === "object" && overviewSummary?.daily) ||
+    (typeof overviewSummary === "object" && overviewSummary?.today) ||
+    (typeof overviewSummary === "object" && overviewSummary?.["24h"]) ||
+    (typeof overviewSummary === "string" ? overviewSummary : "") ||
+    "Нет данных";
+  const weekSummary =
+    (typeof overviewSummary === "object" && overviewSummary?.week) ||
+    (typeof overviewSummary === "object" && overviewSummary?.weekly) ||
+    (typeof overviewSummary === "object" && overviewSummary?.last7days) ||
+    (typeof overviewSummary === "object" && overviewSummary?.["7d"]) ||
+    "Нет данных";
+  const dayTrend = data?.trends?.["24h"];
+  const weekTrend = data?.trends?.["7d"];
+  const dayTrendLabels =
+    dayTrend?.timelineLabels?.length
+      ? dayTrend.timelineLabels
+      : ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00", "24:00"];
+  const dayTrendValues = dayTrend?.volumeSeries?.length ? dayTrend.volumeSeries : [0, 0, 0, 0, 0, 0, 0];
+  const weekTrendLabels =
+    weekTrend?.timelineLabels?.length ? weekTrend.timelineLabels : ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+  const weekTrendValues = weekTrend?.volumeSeries?.length ? weekTrend.volumeSeries : [0, 0, 0, 0, 0, 0, 0];
+  const chartLabels = summaryMode === "day" ? dayTrendLabels : weekTrendLabels;
+  const chartValues = summaryMode === "day" ? dayTrendValues : weekTrendValues;
+
   const topList = useMemo(() => {
     if (!search) {
       return data.topProblems.slice(0, 10);
@@ -33,6 +61,17 @@ export default function OverviewPage({
   return (
     <div className="page">
       {pilotNotice && <div className="pilot-banner">{pilotNotice}</div>}
+
+      <div className="card toolbar">
+        <input
+          className="page-search-input overview-search-input"
+          type="search"
+          value={globalSearch}
+          onChange={(event) => onSearchChange(event.target.value)}
+          placeholder="Поиск"
+          aria-label={isRu ? "Поиск" : "Search"}
+        />
+      </div>
 
       <div className="kpi-grid">
         {KPI_TITLES.map((item) => (
@@ -81,10 +120,10 @@ export default function OverviewPage({
               </button>
             </div>
           </div>
-          <p>{summaryMode === "day" ? data.overviewSummary.day : data.overviewSummary.week}</p>
+          <p>{summaryMode === "day" ? daySummary : weekSummary}</p>
           <div className="mini-chart-wrap">
             <h3>Динамика сигналов</h3>
-            <LineChart values={data.miniTrendSeries} labels={data.miniTrendLabels} />
+            <LineChart values={chartValues} labels={chartLabels} />
           </div>
         </section>
 
@@ -140,3 +179,4 @@ export default function OverviewPage({
     </div>
   );
 }
+

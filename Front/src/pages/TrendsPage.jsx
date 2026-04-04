@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { PERIOD_OPTIONS } from "../data/mockData";
 import LineChart from "../components/common/LineChart";
 
@@ -122,3 +122,4 @@ export default function TrendsPage({ trends }) {
     </div>
   );
 }
+

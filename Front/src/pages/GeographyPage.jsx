@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import Badge, { getPriorityTone } from "../components/common/Badge";
 import {
   ROSTOV_MUNICIPALITY_GEOMETRIES,
@@ -524,6 +524,15 @@ export default function GeographyPage({
     () => topProblems.filter((problem) => problem.municipality === selectedMunicipality),
     [selectedMunicipality, topProblems],
   );
+  const municipalitiesWithNews = useMemo(
+    () =>
+      new Set(
+        allCityMeta
+          .filter((item) => Number(item.signals) > 0)
+          .map((item) => item.sourceName),
+      ),
+    [allCityMeta],
+  );
   const municipalProblemDetails = useMemo(
     () => Object.fromEntries(municipalProblems.map((problem) => [problem.id, getProblemAreaDetails(problem)])),
     [municipalProblems],
@@ -768,12 +777,13 @@ export default function GeographyPage({
                 {orderedZones.map((zone) => {
                   const isActive = selectedMunicipality === zone.sourceName;
                   const isHovered = hoveredMunicipality === zone.sourceName;
+                  const hasNews = municipalitiesWithNews.has(zone.sourceName);
                   return (
                     <g
                       key={zone.sourceName}
-                      className={`map-zone-wrap ${isActive ? "active" : ""} ${isHovered ? "hovered" : ""}`}
+                      className={`map-zone-wrap ${isActive ? "active" : ""} ${isHovered ? "hovered" : ""} ${hasNews ? "" : "no-data"}`}
                       onMouseEnter={() => {
-                        if (!isDragging) {
+                        if (!isDragging && hasNews) {
                           setHoveredMunicipality(zone.sourceName);
                         }
                       }}
@@ -788,10 +798,13 @@ export default function GeographyPage({
                         className="map-zone"
                         onClick={(event) => {
                           event.stopPropagation();
+                          if (!hasNews) {
+                            return;
+                          }
                           selectZone(zone.sourceName);
                         }}
                       >
-                        <title>{zone.displayName}</title>
+                        <title>{hasNews ? zone.displayName : `${zone.displayName}: нет новостей`}</title>
                       </path>
                     </g>
                   );
@@ -817,8 +830,14 @@ export default function GeographyPage({
               <button
                 key={item.sourceName}
                 type="button"
-                className={`geo-zone-chip ${selectedMunicipality === item.sourceName ? "active" : ""}`}
-                onClick={() => selectZone(item.sourceName)}
+                className={`geo-zone-chip ${selectedMunicipality === item.sourceName ? "active" : ""} ${municipalitiesWithNews.has(item.sourceName) ? "" : "no-data"}`}
+                onClick={() => {
+                  if (!municipalitiesWithNews.has(item.sourceName)) {
+                    return;
+                  }
+                  selectZone(item.sourceName);
+                }}
+                disabled={!municipalitiesWithNews.has(item.sourceName)}
               >
                 <span>{item.labelName}</span>
                 <small>{item.signals}</small>
@@ -924,3 +943,4 @@ export default function GeographyPage({
     </div>
   );
 }
+

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Badge, { getPriorityTone } from "../components/common/Badge";
+import SelectField from "../components/common/SelectField";
 import { getAllMunicipalities, getAllSectors } from "../data/mockData";
 
 const WINDOWS = [
@@ -9,8 +10,7 @@ const WINDOWS = [
   { value: "30", label: "30 дней" },
 ];
 
-export default function TopicsPage({ topics, globalSearch, onOpenTopic }) {
-  const [localSearch, setLocalSearch] = useState("");
+export default function TopicsPage({ topics, globalSearch, onSearchChange, onOpenTopic }) {
   const [sector, setSector] = useState("Все");
   const [municipality, setMunicipality] = useState("Все");
   const [sourceType, setSourceType] = useState("Все");
@@ -22,7 +22,7 @@ export default function TopicsPage({ topics, globalSearch, onOpenTopic }) {
   const municipalities = useMemo(() => ["Все", ...getAllMunicipalities(topics)], [topics]);
 
   const filtered = useMemo(() => {
-    const mergedQuery = `${globalSearch} ${localSearch}`.trim().toLowerCase();
+    const mergedQuery = `${globalSearch}`.trim().toLowerCase();
     return topics
       .filter((item) => (sector === "Все" ? true : item.sector === sector))
       .filter((item) => (municipality === "Все" ? true : item.municipality === municipality))
@@ -55,64 +55,86 @@ export default function TopicsPage({ topics, globalSearch, onOpenTopic }) {
         }
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       });
-  }, [globalSearch, localSearch, municipality, sector, sortBy, sourceType, topics, windowFilter]);
+  }, [globalSearch, municipality, sector, sortBy, sourceType, topics, windowFilter]);
+
+  const resetFilters = () => {
+    onSearchChange("");
+    setSector("Все");
+    setMunicipality("Все");
+    setSourceType("Все");
+    setWindowFilter("all");
+    setSortBy("score");
+  };
 
   return (
     <div className="page">
       <div className="card toolbar">
         <h2>Темы и события</h2>
         <div className="filters-grid topics-filters">
-          <label>
-            Поиск
-            <input
-              type="search"
-              value={localSearch}
-              onChange={(event) => setLocalSearch(event.target.value)}
-              placeholder="Название темы или ключевые слова"
-            />
-          </label>
-          <label>
-            Отрасль
-            <select value={sector} onChange={(event) => setSector(event.target.value)}>
-              {sectors.map((value) => (
-                <option key={value}>{value}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Муниципалитет
-            <select value={municipality} onChange={(event) => setMunicipality(event.target.value)}>
-              {municipalities.map((value) => (
-                <option key={value}>{value}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Тип источника
-            <select value={sourceType} onChange={(event) => setSourceType(event.target.value)}>
-              {["Все", "СМИ", "Telegram", "ВКонтакте", "Официальный"].map((value) => (
-                <option key={value}>{value}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Период
-            <select value={windowFilter} onChange={(event) => setWindowFilter(event.target.value)}>
-              {WINDOWS.map((windowOption) => (
-                <option key={windowOption.value} value={windowOption.value}>
-                  {windowOption.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Сортировка
-            <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-              <option value="score">По интегральному баллу</option>
-              <option value="updated">По дате обновления</option>
-              <option value="sources">По числу источников</option>
-            </select>
-          </label>
+          <input
+            className="page-search-input page-compact-control"
+            type="search"
+            value={globalSearch}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="Поиск"
+            aria-label="Поиск"
+          />
+          <SelectField
+            className="page-compact-control"
+            ariaLabel="Отрасль"
+            value={sector}
+            onChange={setSector}
+            options={sectors.map((value) => ({
+              value,
+              label: value === "Все" ? "Отрасль" : value,
+            }))}
+          />
+          <SelectField
+            className="page-compact-control"
+            ariaLabel="Муниципалитет"
+            value={municipality}
+            onChange={setMunicipality}
+            options={municipalities.map((value) => ({
+              value,
+              label: value === "Все" ? "Муниципалитет" : value,
+            }))}
+          />
+          <SelectField
+            className="page-compact-control"
+            ariaLabel="Тип источника"
+            value={sourceType}
+            onChange={setSourceType}
+            options={["Все", "СМИ", "Telegram", "ВКонтакте", "Официальный"].map((value) => ({
+              value,
+              label: value === "Все" ? "Тип источника" : value,
+            }))}
+          />
+          <SelectField
+            className="page-compact-control"
+            ariaLabel="Период"
+            value={windowFilter}
+            onChange={setWindowFilter}
+            options={WINDOWS.map((windowOption) => ({
+              value: windowOption.value,
+              label: windowOption.value === "all" ? "Период" : windowOption.label,
+            }))}
+          />
+          <SelectField
+            className="page-compact-control"
+            ariaLabel="Сортировка"
+            value={sortBy}
+            onChange={setSortBy}
+            options={[
+              { value: "score", label: "Сортировка" },
+              { value: "updated", label: "По дате обновления" },
+              { value: "sources", label: "По числу источников" },
+            ]}
+          />
+        </div>
+        <div className="filters-actions">
+          <button type="button" className="ghost-button" onClick={resetFilters}>
+            Сбросить фильтры
+          </button>
         </div>
 
         <div className="toolbar-end">

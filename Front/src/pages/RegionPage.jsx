@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import SelectField from "../components/common/SelectField";
 
 export default function RegionPage({ regions, selectedRegion, onSaveRegion, onNotify, locale = "ru" }) {
   const [nextRegion, setNextRegion] = useState(selectedRegion);
@@ -30,13 +31,12 @@ export default function RegionPage({ regions, selectedRegion, onSaveRegion, onNo
       <div className="card region-select-card animate-in">
         <label>
           {isRu ? "Регион" : "Region"}
-          <select value={nextRegion} onChange={(event) => setNextRegion(event.target.value)}>
-            {regions.map((region) => (
-              <option key={region.id} value={region.name}>
-                {region.name}
-              </option>
-            ))}
-          </select>
+          <SelectField
+            ariaLabel={isRu ? "Регион" : "Region"}
+            value={nextRegion}
+            onChange={setNextRegion}
+            options={regions.map((region) => ({ value: region.name, label: region.name }))}
+          />
         </label>
 
         <div className="region-selected-line">

@@ -1,11 +1,10 @@
-export const SIDEBAR_SECTIONS = [
+﻿export const SIDEBAR_SECTIONS = [
   { id: "overview", label: "Обзор" },
   { id: "top", label: "Топ проблем" },
   { id: "topics", label: "Темы и события" },
   { id: "trends", label: "Тренды" },
   { id: "sources", label: "Источники" },
   { id: "geography", label: "География" },
-  { id: "reports", label: "Отчёты" },
   { id: "notebook", label: "Блокнот" },
   { id: "profile", label: "Профиль" },
   { id: "settings", label: "Настройки" },
@@ -610,3 +609,4 @@ export const PERIOD_OPTIONS = [
   { value: "7d", label: "7 дней" },
   { value: "30d", label: "30 дней" },
 ];
+

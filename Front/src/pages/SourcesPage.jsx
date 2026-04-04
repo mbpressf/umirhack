@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
+import SelectField from "../components/common/SelectField";
 import { SOURCE_STATUS_OPTIONS, SOURCE_TYPE_OPTIONS } from "../data/mockData";
 
-export default function SourcesPage({ sources, globalSearch }) {
+export default function SourcesPage({ sources, globalSearch, onSearchChange }) {
   const [typeFilter, setTypeFilter] = useState("Все");
   const [statusFilter, setStatusFilter] = useState("Все");
   const [sortBy, setSortBy] = useState("share");
@@ -24,37 +25,63 @@ export default function SourcesPage({ sources, globalSearch }) {
   }, [globalSearch, sortBy, sources, statusFilter, typeFilter]);
 
   const totalShare = filtered.reduce((sum, source) => sum + source.share, 0);
+  const resetFilters = () => {
+    onSearchChange("");
+    setTypeFilter("Все");
+    setStatusFilter("Все");
+    setSortBy("share");
+  };
 
   return (
     <div className="page">
       <div className="card toolbar">
         <h2>Источники</h2>
         <div className="filters-grid">
-          <label>
-            Тип площадки
-            <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-              {SOURCE_TYPE_OPTIONS.map((option) => (
-                <option key={option}>{option}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Статус источника
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              {SOURCE_STATUS_OPTIONS.map((option) => (
-                <option key={option}>{option}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Сортировка
-            <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-              <option value="share">По доле вклада</option>
-              <option value="topics">По числу тем</option>
-              <option value="reliability">По надёжности</option>
-            </select>
-          </label>
+          <input
+            className="page-search-input page-compact-control"
+            type="search"
+            value={globalSearch}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="Поиск"
+            aria-label="Поиск"
+          />
+          <SelectField
+            className="page-compact-control"
+            ariaLabel="Тип площадки"
+            value={typeFilter}
+            onChange={setTypeFilter}
+            options={SOURCE_TYPE_OPTIONS.map((option) => ({
+              value: option,
+              label: option === "Все" ? "Тип площадки" : option,
+            }))}
+          />
+          <SelectField
+            className="page-compact-control"
+            ariaLabel="Статус источника"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={SOURCE_STATUS_OPTIONS.map((option) => ({
+              value: option,
+              label: option === "Все" ? "Статус источника" : option,
+            }))}
+          />
+          <SelectField
+            className="page-compact-control"
+            ariaLabel="Сортировка"
+            value={sortBy}
+            onChange={setSortBy}
+            options={[
+              { value: "share", label: "Сортировка" },
+              { value: "topics", label: "По числу тем" },
+              { value: "reliability", label: "По надёжности" },
+            ]}
+          />
           <div className="filter-counter">Доля в выборке: {totalShare}%</div>
+        </div>
+        <div className="filters-actions">
+          <button type="button" className="ghost-button" onClick={resetFilters}>
+            Сбросить фильтры
+          </button>
         </div>
       </div>
 

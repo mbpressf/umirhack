@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import Badge, { getPriorityTone } from "../components/common/Badge";
+import SelectField from "../components/common/SelectField";
 import { getAllMunicipalities, getAllSectors } from "../data/mockData";
 
-export default function TopProblemsPage({ problems, globalSearch, onOpenTopic }) {
+export default function TopProblemsPage({ problems, globalSearch, onSearchChange, onOpenTopic }) {
   const [sector, setSector] = useState("Все");
   const [municipality, setMunicipality] = useState("Все");
   const [priority, setPriority] = useState("Все");
@@ -24,36 +25,62 @@ export default function TopProblemsPage({ problems, globalSearch, onOpenTopic })
       );
   }, [globalSearch, municipality, priority, problems, sector]);
 
+  const resetFilters = () => {
+    onSearchChange("");
+    setSector("Все");
+    setMunicipality("Все");
+    setPriority("Все");
+  };
+
   return (
     <div className="page">
       <div className="toolbar card">
         <h2>Топ проблем</h2>
         <div className="filters-grid">
-          <label>
-            Отрасль
-            <select value={sector} onChange={(event) => setSector(event.target.value)}>
-              {sectors.map((value) => (
-                <option key={value}>{value}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Муниципалитет
-            <select value={municipality} onChange={(event) => setMunicipality(event.target.value)}>
-              {municipalities.map((value) => (
-                <option key={value}>{value}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Важность
-            <select value={priority} onChange={(event) => setPriority(event.target.value)}>
-              {["Все", "Критический", "Высокий", "Средний", "Наблюдение"].map((value) => (
-                <option key={value}>{value}</option>
-              ))}
-            </select>
-          </label>
+          <input
+            className="page-filter-control page-search-input page-compact-control"
+            type="search"
+            value={globalSearch}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="Поиск"
+            aria-label="Поиск"
+          />
+          <SelectField
+            className="page-filter-control page-compact-control"
+            ariaLabel="Отрасль"
+            value={sector}
+            onChange={setSector}
+            options={sectors.map((value) => ({
+              value,
+              label: value === "Все" ? "Отрасль" : value,
+            }))}
+          />
+          <SelectField
+            className="page-filter-control page-compact-control"
+            ariaLabel="Муниципалитет"
+            value={municipality}
+            onChange={setMunicipality}
+            options={municipalities.map((value) => ({
+              value,
+              label: value === "Все" ? "Муниципалитет" : value,
+            }))}
+          />
+          <SelectField
+            className="page-filter-control page-compact-control"
+            ariaLabel="Важность"
+            value={priority}
+            onChange={setPriority}
+            options={["Все", "Критический", "Высокий", "Средний", "Наблюдение"].map((value) => ({
+              value,
+              label: value === "Все" ? "Важность" : value,
+            }))}
+          />
           <div className="filter-counter">{filtered.length} карточек</div>
+        </div>
+        <div className="filters-actions">
+          <button type="button" className="ghost-button" onClick={resetFilters}>
+            Сбросить фильтры
+          </button>
         </div>
       </div>
 
@@ -122,3 +149,4 @@ export default function TopProblemsPage({ problems, globalSearch, onOpenTopic })
     </div>
   );
 }
+

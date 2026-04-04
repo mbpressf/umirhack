@@ -1,4 +1,4 @@
-import SignalLogo from "../common/SignalLogo";
+﻿import SignalLogo from "../common/SignalLogo";
 
 const ICONS = {
   overview: "M3 12h18M3 6h18M3 18h18",
@@ -89,3 +89,4 @@ export default function Sidebar({
     </>
   );
 }
+

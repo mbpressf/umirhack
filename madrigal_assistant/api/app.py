@@ -2,13 +2,30 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from datetime import datetime
+import hashlib
+import hmac
+import re
 from typing import Annotated
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, PlainTextResponse
 
-from madrigal_assistant.models import ImportSeedResponse, IngestRequest, IngestRunResult, ProblemCardsResponse, RawEventsResponse, SimilarTopicsResponse, TopIssuesResponse, TopicSummary, TrendsResponse
+from madrigal_assistant.models import (
+    AuthResponse,
+    AuthUser,
+    ImportSeedResponse,
+    IngestRequest,
+    IngestRunResult,
+    LoginRequest,
+    ProblemCardsResponse,
+    RawEventsResponse,
+    RegisterRequest,
+    SimilarTopicsResponse,
+    TopIssuesResponse,
+    TopicSummary,
+    TrendsResponse,
+)
 from madrigal_assistant.services import RegionalPulseService
 
 
@@ -16,6 +33,31 @@ def _parse_optional_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
     return datetime.fromisoformat(value)
+
+
+def _normalize_login(raw_login: str) -> str:
+    value = (raw_login or "").strip()
+    if "@" in value:
+        return value.lower()
+    digits = re.sub(r"\D+", "", value)
+    if len(digits) == 11 and digits.startswith("8"):
+        digits = "7" + digits[1:]
+    if len(digits) == 11 and digits.startswith("7"):
+        return f"+{digits}"
+    return value
+
+
+def _is_login_valid(login: str) -> bool:
+    if not login:
+        return False
+    if "@" in login:
+        return bool(re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", login))
+    return bool(re.fullmatch(r"\+\d{11}", login))
+
+
+def _hash_password(login: str, password: str) -> str:
+    salt = hashlib.sha256(login.encode("utf-8")).digest()
+    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 120_000).hex()
 
 
 def create_app(service: RegionalPulseService | None = None) -> FastAPI:
@@ -200,6 +242,45 @@ def create_app(service: RegionalPulseService | None = None) -> FastAPI:
         if format == "html":
             return HTMLResponse(api_service.export_html(start, end, sector, municipality, source_type))
         return PlainTextResponse(api_service.export_csv(start, end, sector, municipality, source_type))
+
+    @app.post("/api/auth/register", response_model=AuthResponse)
+    def register(payload: RegisterRequest) -> AuthResponse:
+        login = _normalize_login(payload.login)
+        if not _is_login_valid(login):
+            raise HTTPException(status_code=400, detail="Введите корректную почту или телефон")
+        if len(payload.password) < 6:
+            raise HTTPException(status_code=400, detail="Пароль должен содержать минимум 6 символов")
+        if payload.password != payload.password_confirm:
+            raise HTTPException(status_code=400, detail="Пароли не совпадают")
+
+        created = api_service.db.create_user(login=login, password_hash=_hash_password(login, payload.password))
+        if not created:
+            existing_user = api_service.db.get_user_with_secret(login=login)
+            if existing_user:
+                raise HTTPException(status_code=409, detail="Пользователь с таким логином уже существует")
+            raise HTTPException(status_code=500, detail="Не удалось зарегистрировать пользователя. Попробуйте позже")
+        return AuthResponse(user=AuthUser(**created))
+
+    @app.post("/api/auth/login", response_model=AuthResponse)
+    def login(payload: LoginRequest) -> AuthResponse:
+        login = _normalize_login(payload.login)
+        if not _is_login_valid(login):
+            raise HTTPException(status_code=400, detail="Введите корректную почту или телефон")
+        user = api_service.db.get_user_with_secret(login=login)
+        if not user:
+            raise HTTPException(status_code=401, detail="Неверный логин или пароль")
+
+        expected_hash = _hash_password(login, payload.password)
+        if not hmac.compare_digest(user["password_hash"], expected_hash):
+            raise HTTPException(status_code=401, detail="Неверный логин или пароль")
+
+        return AuthResponse(
+            user=AuthUser(
+                id=user["id"],
+                login=user["login"],
+                created_at=user["created_at"],
+            )
+        )
 
     return app
 

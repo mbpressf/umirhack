@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import SelectField from "../components/common/SelectField";
 
-const SECTORS = [
+const DEFAULT_SECTORS = [
   "ЖКХ",
   "Транспорт",
   "Здравоохранение",
@@ -10,7 +11,7 @@ const SECTORS = [
   "Благоустройство",
 ];
 
-export default function SettingsPage({ settings, onSave, onNotify, locale = "ru" }) {
+export default function SettingsPage({ settings, onSave, onNotify, locale = "ru", availableSectors = DEFAULT_SECTORS }) {
   const [draft, setDraft] = useState(settings);
   const isRu = locale === "ru";
 
@@ -45,37 +46,43 @@ export default function SettingsPage({ settings, onSave, onNotify, locale = "ru"
         <div className="settings-grid">
           <label>
             {isRu ? "Тема интерфейса" : "Theme"}
-            <select
+            <SelectField
+              ariaLabel={isRu ? "Тема интерфейса" : "Theme"}
               value={draft.theme}
-              onChange={(event) => setDraft((current) => ({ ...current, theme: event.target.value }))}
-            >
-              <option value="light">{isRu ? "Светлая" : "Light"}</option>
-              <option value="dark">{isRu ? "Тёмная" : "Dark"}</option>
-            </select>
+              onChange={(nextValue) => setDraft((current) => ({ ...current, theme: nextValue }))}
+              options={[
+                { value: "light", label: isRu ? "Светлая" : "Light" },
+                { value: "dark", label: isRu ? "Тёмная" : "Dark" },
+              ]}
+            />
           </label>
 
           <label>
             {isRu ? "Язык интерфейса" : "Interface language"}
-            <select
+            <SelectField
+              ariaLabel={isRu ? "Язык интерфейса" : "Interface language"}
               value={draft.language}
-              onChange={(event) => setDraft((current) => ({ ...current, language: event.target.value }))}
-            >
-              <option value="ru">Русский</option>
-              <option value="en">English</option>
-            </select>
+              onChange={(nextValue) => setDraft((current) => ({ ...current, language: nextValue }))}
+              options={[
+                { value: "ru", label: "Русский" },
+                { value: "en", label: "English" },
+              ]}
+            />
           </label>
 
           <label>
             {isRu ? "Частота обновления" : "Refresh rate"}
-            <select
+            <SelectField
+              ariaLabel={isRu ? "Частота обновления" : "Refresh rate"}
               value={draft.refreshRate}
-              onChange={(event) => setDraft((current) => ({ ...current, refreshRate: event.target.value }))}
-            >
-              <option>5 минут</option>
-              <option>15 минут</option>
-              <option>30 минут</option>
-              <option>60 минут</option>
-            </select>
+              onChange={(nextValue) => setDraft((current) => ({ ...current, refreshRate: nextValue }))}
+              options={[
+                { value: "5 минут", label: "5 минут" },
+                { value: "15 минут", label: "15 минут" },
+                { value: "30 минут", label: "30 минут" },
+                { value: "60 минут", label: "60 минут" },
+              ]}
+            />
           </label>
 
           <label className="single-check">
@@ -95,7 +102,7 @@ export default function SettingsPage({ settings, onSave, onNotify, locale = "ru"
         <section>
           <h3>{isRu ? "Приоритетные отрасли" : "Priority sectors"}</h3>
           <div className="chip-grid">
-            {SECTORS.map((sector) => (
+            {availableSectors.map((sector) => (
               <button
                 key={sector}
                 type="button"

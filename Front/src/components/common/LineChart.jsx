@@ -1,4 +1,4 @@
-const makePoints = (values) => {
+﻿const makePoints = (values) => {
   if (!values.length) {
     return "";
   }
@@ -18,6 +18,7 @@ const makePoints = (values) => {
 
 export default function LineChart({ values = [], labels = [], highlight = "var(--accent)" }) {
   const points = makePoints(values);
+  const labelColumns = Math.max(labels.length, 1);
 
   return (
     <div className="line-chart">
@@ -25,7 +26,7 @@ export default function LineChart({ values = [], labels = [], highlight = "var(-
         <polyline points="0,88 100,88" className="line-chart-grid" />
         <polyline points={points} className="line-chart-line" style={{ stroke: highlight }} />
       </svg>
-      <div className="line-chart-labels">
+      <div className="line-chart-labels" style={{ gridTemplateColumns: `repeat(${labelColumns}, minmax(0, 1fr))` }}>
         {labels.map((label) => (
           <span key={label}>{label}</span>
         ))}
@@ -33,3 +34,4 @@ export default function LineChart({ values = [], labels = [], highlight = "var(-
     </div>
   );
 }
+

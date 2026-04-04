@@ -49,8 +49,26 @@ class Database:
                     ON raw_events(published_at);
                 CREATE INDEX IF NOT EXISTS idx_raw_events_source_type
                     ON raw_events(source_type);
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    login TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
                 """
             )
+
+    def _ensure_users_table(self, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                login TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
 
     def reset(self) -> None:
         with self._connect() as connection:
@@ -168,3 +186,37 @@ class Database:
             )
             for row in rows
         ]
+
+    def create_user(self, login: str, password_hash: str) -> dict | None:
+        try:
+            with self._connect() as connection:
+                self._ensure_users_table(connection)
+                cursor = connection.execute(
+                    """
+                    INSERT INTO users (login, password_hash)
+                    VALUES (?, ?)
+                    """,
+                    (login, password_hash),
+                )
+                user_id = cursor.lastrowid
+                row = connection.execute(
+                    "SELECT id, login, created_at FROM users WHERE id = ?",
+                    (user_id,),
+                ).fetchone()
+                return dict(row) if row else None
+        except sqlite3.IntegrityError:
+            return None
+        except sqlite3.Error:
+            return None
+
+    def get_user_with_secret(self, login: str) -> dict | None:
+        try:
+            with self._connect() as connection:
+                self._ensure_users_table(connection)
+                row = connection.execute(
+                    "SELECT id, login, password_hash, created_at FROM users WHERE login = ?",
+                    (login,),
+                ).fetchone()
+            return dict(row) if row else None
+        except sqlite3.Error:
+            return None

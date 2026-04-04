@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import SelectField from "../components/common/SelectField";
 
 const PERIODS = [
   { value: "24h", label: "24 часа" },
@@ -8,6 +9,7 @@ const PERIODS = [
 
 export default function ReportsPage({ reportPreview, topProblems, overviewSummary, locale = "ru" }) {
   const [period, setPeriod] = useState("7d");
+  const [actionMessage, setActionMessage] = useState("");
   const isRu = locale === "ru";
 
   const previewText = useMemo(() => {
@@ -21,6 +23,29 @@ export default function ReportsPage({ reportPreview, topProblems, overviewSummar
     }: ${top3 || (isRu ? "данные в процессе подключения" : "data is being connected")}.\n${reportPreview}`;
   }, [isRu, overviewSummary.day, overviewSummary.week, period, reportPreview, topProblems]);
 
+  const copyReport = async () => {
+    try {
+      await navigator.clipboard.writeText(previewText);
+      setActionMessage(isRu ? "Сводка скопирована." : "Summary copied.");
+    } catch (error) {
+      setActionMessage(isRu ? "Не удалось скопировать сводку." : "Unable to copy summary.");
+    }
+  };
+
+  const downloadReport = () => {
+    const blob = new Blob([previewText], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const date = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `report-${period}-${date}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setActionMessage(isRu ? "Файл отчёта скачан." : "Report file downloaded.");
+  };
+
   return (
     <div className="page">
       <div className="card toolbar">
@@ -28,18 +53,21 @@ export default function ReportsPage({ reportPreview, topProblems, overviewSummar
         <div className="filters-grid">
           <label>
             {isRu ? "Период" : "Period"}
-            <select value={period} onChange={(event) => setPeriod(event.target.value)}>
-              {PERIODS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <SelectField
+              ariaLabel={isRu ? "Период" : "Period"}
+              value={period}
+              onChange={setPeriod}
+              options={PERIODS}
+            />
           </label>
-          <div className="card report-admin-only">
-            {isRu
-              ? "Экспорт сводок доступен только в админ-панели."
-              : "Summary export is available only in admin panel."}
+          <div className="report-actions">
+            <button type="button" className="secondary-button" onClick={copyReport}>
+              {isRu ? "Скопировать" : "Copy"}
+            </button>
+            <button type="button" className="primary-button" onClick={downloadReport}>
+              {isRu ? "Скачать .txt" : "Download .txt"}
+            </button>
+            {actionMessage && <span className="muted">{actionMessage}</span>}
           </div>
         </div>
       </div>

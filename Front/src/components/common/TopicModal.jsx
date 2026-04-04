@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Badge, { getPriorityTone } from "./Badge";
+import SelectField from "./SelectField";
 
 const FACTOR_LABELS = {
   intensity: "Интенсивность обсуждения",
@@ -77,10 +78,15 @@ export default function TopicModal({ topic, onClose, onAddNote }) {
           <div className="note-box">
             <label>
               Тип пометки
-              <select value={noteMark} onChange={(event) => setNoteMark(event.target.value)}>
-                <option>Обязательно</option>
-                <option>Необязательно</option>
-              </select>
+              <SelectField
+                ariaLabel="Тип пометки"
+                value={noteMark}
+                onChange={setNoteMark}
+                options={[
+                  { value: "Обязательно", label: "Обязательно" },
+                  { value: "Необязательно", label: "Необязательно" },
+                ]}
+              />
             </label>
             <label>
               Заметка

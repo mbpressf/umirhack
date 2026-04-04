@@ -1,4 +1,4 @@
-import { useId } from "react";
+﻿import { useId } from "react";
 
 function Emblem({ small = false }) {
   const size = small ? 32 : 40;
@@ -61,3 +61,4 @@ export default function SignalLogo({ compact = false, showSub = true }) {
     </div>
   );
 }
+

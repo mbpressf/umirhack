@@ -1,4 +1,4 @@
-const PRIORITY_TONE = {
+﻿const PRIORITY_TONE = {
   Критический: "critical",
   Высокий: "high",
   Средний: "medium",
@@ -14,3 +14,4 @@ export default function Badge({ text, tone = "neutral", outlined = false }) {
     </span>
   );
 }
+

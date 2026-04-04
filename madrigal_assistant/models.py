@@ -243,3 +243,24 @@ class RawEventsResponse(BaseModel):
     region: str
     total_events: int
     items: list[RawEvent]
+
+
+class AuthUser(BaseModel):
+    id: int
+    login: str
+    created_at: str
+
+
+class RegisterRequest(BaseModel):
+    login: str
+    password: str
+    password_confirm: str
+
+
+class LoginRequest(BaseModel):
+    login: str
+    password: str
+
+
+class AuthResponse(BaseModel):
+    user: AuthUser
