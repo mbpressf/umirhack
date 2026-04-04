@@ -1,0 +1,16 @@
+services:
+  madrigal-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: madrigal-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${APP_PORT:-80}:8000"
+    volumes:
+      - ./data:/app/data
+      - ./datasets:/app/datasets
+      - ./logs:/app/logs
+      - ./config:/app/config

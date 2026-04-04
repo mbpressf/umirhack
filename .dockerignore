@@ -1,0 +1,17 @@
+.git
+.gitignore
+.venv
+.venv-wsl
+.pytest_cache
+__pycache__
+node_modules
+Front/node_modules
+Front/dist
+build
+dist
+logs
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/tmp_*.db
+user_tests

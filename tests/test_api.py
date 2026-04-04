@@ -82,3 +82,24 @@ def test_api_refresh_status_returns_scheduler_metadata(tmp_path: Path) -> None:
     assert "intervalSeconds" in payload
     assert "maxPerSource" in payload
     assert "running" in payload
+
+
+def test_api_serves_built_frontend_when_dist_exists(tmp_path: Path, monkeypatch) -> None:
+    frontend_dist = tmp_path / "dist"
+    assets_dir = frontend_dist / "assets"
+    assets_dir.mkdir(parents=True)
+    (frontend_dist / "index.html").write_text("<html><body>frontend ok</body></html>", encoding="utf-8")
+    (assets_dir / "app.js").write_text("console.log('ok')", encoding="utf-8")
+
+    monkeypatch.setenv("MADRIGAL_FRONTEND_DIST_PATH", str(frontend_dist))
+
+    service = RegionalPulseService(db_path=tmp_path / "api-frontend-static.db")
+    client = TestClient(create_app(service))
+
+    root_response = client.get("/")
+    assert root_response.status_code == 200
+    assert "frontend ok" in root_response.text
+
+    asset_response = client.get("/assets/app.js")
+    assert asset_response.status_code == 200
+    assert "console.log('ok')" in asset_response.text

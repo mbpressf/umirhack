@@ -9,6 +9,7 @@ DEFAULT_CONFIG_PATH = ROOT_DIR / "config" / "demo_region.rostov.json"
 DEFAULT_DB_PATH = ROOT_DIR / "data" / "madrigal.db"
 DEFAULT_SEED_PATH = ROOT_DIR / "data" / "seed_rostov_last7d.json"
 DEFAULT_SOURCE_CATALOG_PATH = ROOT_DIR / "config" / "source_catalog.rostov.json"
+DEFAULT_FRONTEND_DIST_PATH = ROOT_DIR / "Front" / "dist"
 
 
 def get_db_path() -> Path:
@@ -25,6 +26,10 @@ def get_seed_path() -> Path:
 
 def get_source_catalog_path() -> Path:
     return Path(os.getenv("MADRIGAL_SOURCE_CATALOG_PATH", DEFAULT_SOURCE_CATALOG_PATH))
+
+
+def get_frontend_dist_path() -> Path:
+    return Path(os.getenv("MADRIGAL_FRONTEND_DIST_PATH", DEFAULT_FRONTEND_DIST_PATH))
 
 
 def _env_flag(name: str, default: bool) -> bool:

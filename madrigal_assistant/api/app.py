@@ -9,7 +9,8 @@ from typing import Annotated
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 
 from madrigal_assistant.models import (
     AuthResponse,
@@ -27,6 +28,7 @@ from madrigal_assistant.models import (
     TrendsResponse,
 )
 from madrigal_assistant.services import RegionalPulseService
+from madrigal_assistant.settings import get_frontend_dist_path
 
 
 def _parse_optional_datetime(value: str | None) -> datetime | None:
@@ -58,6 +60,34 @@ def _is_login_valid(login: str) -> bool:
 def _hash_password(login: str, password: str) -> str:
     salt = hashlib.sha256(login.encode("utf-8")).digest()
     return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 120_000).hex()
+
+
+def _configure_frontend(app: FastAPI) -> None:
+    frontend_dist = get_frontend_dist_path()
+    index_file = frontend_dist / "index.html"
+    if not index_file.exists():
+        return
+
+    assets_dir = frontend_dist / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="frontend-assets")
+
+    @app.get("/", include_in_schema=False)
+    def frontend_index() -> FileResponse:
+        return FileResponse(index_file)
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def frontend_spa(full_path: str) -> FileResponse:
+        if full_path.startswith("api/") or full_path in {"health", "docs", "redoc", "openapi.json"}:
+            raise HTTPException(status_code=404, detail="Not found")
+        requested = (frontend_dist / full_path).resolve()
+        try:
+            requested.relative_to(frontend_dist.resolve())
+        except ValueError as error:
+            raise HTTPException(status_code=404, detail="Not found") from error
+        if requested.is_file():
+            return FileResponse(requested)
+        return FileResponse(index_file)
 
 
 def create_app(service: RegionalPulseService | None = None) -> FastAPI:
@@ -282,6 +312,7 @@ def create_app(service: RegionalPulseService | None = None) -> FastAPI:
             )
         )
 
+    _configure_frontend(app)
     return app
 
 

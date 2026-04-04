@@ -182,6 +182,38 @@ $env:MADRIGAL_AUTO_REFRESH_MAX_PER_SOURCE="4"
 http://127.0.0.1:8000/api/refresh-status
 ```
 
+## Как поднять на сервере
+
+Для продового запуска теперь есть git-friendly Docker-контур:
+
+- [D:/umirhack/Dockerfile](D:/umirhack/Dockerfile)
+- [D:/umirhack/docker-compose.yml](D:/umirhack/docker-compose.yml)
+- [D:/umirhack/.env.example](D:/umirhack/.env.example)
+- [D:/umirhack/deploy/server/first_setup.sh](D:/umirhack/deploy/server/first_setup.sh)
+- [D:/umirhack/deploy/server/update.sh](D:/umirhack/deploy/server/update.sh)
+
+Первичная установка на Ubuntu:
+
+```bash
+chmod +x deploy/server/first_setup.sh deploy/server/update.sh
+./deploy/server/first_setup.sh
+```
+
+Дальше после каждого `git push` достаточно:
+
+```bash
+cd /opt/umirhack
+./deploy/server/update.sh
+```
+
+Что делает продовый контур:
+
+- собирает frontend через `vite build`
+- кладёт готовый `dist` внутрь backend-контейнера
+- FastAPI отдаёт и API, и frontend с одного сервиса
+- `data`, `datasets`, `logs`, `config` остаются на сервере как volume
+- если база пустая, при старте подтягивается seed-датасет
+
 Поднять dashboard:
 
 ```powershell
