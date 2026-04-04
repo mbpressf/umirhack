@@ -10,21 +10,28 @@ from pathlib import Path
 from typing import Any
 
 from madrigal_assistant.analytics import AnalyticsService
+from madrigal_assistant.embeddings import EmbeddingService
 from madrigal_assistant.ingest import IngestionService
-from madrigal_assistant.models import ImportSeedResponse, IngestRunResult, ProblemCardsResponse, RawEvent, RawEventsResponse, TopIssuesResponse, TopicSummary, TrendsResponse
+from madrigal_assistant.models import ImportSeedResponse, IngestRunResult, ProblemCardsResponse, RawEvent, RawEventsResponse, SimilarTopicsResponse, TopIssuesResponse, TopicSummary, TrendsResponse
 from madrigal_assistant.settings import get_config_path, get_db_path, get_seed_path, load_region_config
 from madrigal_assistant.storage import Database
 from madrigal_assistant.text import stable_event_id
 
 
 class RegionalPulseService:
-    def __init__(self, db_path: Path | None = None, config_path: Path | None = None):
+    def __init__(
+        self,
+        db_path: Path | None = None,
+        config_path: Path | None = None,
+        embedding_service: EmbeddingService | None = None,
+    ):
         self.config_path = config_path or get_config_path()
         self.region_config = load_region_config(self.config_path)
         self.db = Database(db_path or get_db_path())
         self.db.init()
         self.ingestion = IngestionService(self.region_config)
-        self.analytics = AnalyticsService(self.region_config)
+        self.embedding_service = embedding_service or EmbeddingService()
+        self.analytics = AnalyticsService(self.region_config, embedding_service=self.embedding_service)
 
     def import_seed(self, upload_bytes: bytes | None = None, filename: str | None = None) -> ImportSeedResponse:
         source = filename or str(get_seed_path())
@@ -94,6 +101,30 @@ class RegionalPulseService:
         municipality: str | None = None,
     ) -> TrendsResponse:
         return self.analytics.build_trends(self.db.fetch_events(start=start, end=end), start, end, sector, municipality)
+
+    def get_similar_topics(
+        self,
+        topic_id: str | None = None,
+        query: str | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        sector: str | None = None,
+        municipality: str | None = None,
+        source_type: str | None = None,
+        limit: int = 5,
+    ) -> SimilarTopicsResponse:
+        events = self.db.fetch_events(start=start, end=end, source_type=source_type)
+        return self.analytics.build_similar_topics(
+            events,
+            topic_id=topic_id,
+            query=query,
+            start=start,
+            end=end,
+            sector=sector,
+            municipality=municipality,
+            source_type=source_type,
+            limit=limit,
+        )
 
     def get_raw_events(
         self,
@@ -208,6 +239,9 @@ class RegionalPulseService:
             "municipalities": [value for value in municipalities if value],
             "source_types": sorted({event.source_type for event in events}),
         }
+
+    def embedding_layer_status(self) -> dict[str, object]:
+        return self.embedding_service.status().as_dict()
 
     def get_source_catalog(self) -> list[dict[str, Any]]:
         return self.region_config.get("source_catalog", [])

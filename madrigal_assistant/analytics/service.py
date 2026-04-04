@@ -6,12 +6,15 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 
+from madrigal_assistant.embeddings import EmbeddingService
 from madrigal_assistant.models import (
     ProblemCard,
     ProblemCardsResponse,
     ProblemTimelineEvent,
     RawEvent,
     ScoreBreakdown,
+    SimilarTopic,
+    SimilarTopicsResponse,
     SourceMix,
     TopicEvidence,
     TopicSummary,
@@ -145,6 +148,7 @@ class EnrichedEvent:
     sector: str
     municipality: str
     issue_score: float
+    embedding: tuple[float, ...] | None = None
 
 
 @dataclass
@@ -156,6 +160,8 @@ class TopicCluster:
     key_terms: set[str] = field(default_factory=set)
     anchor_terms: set[str] = field(default_factory=set)
     topic_id: str = ""
+    centroid_embedding: tuple[float, ...] | None = None
+    embedding_count: int = 0
 
     def add(self, event: EnrichedEvent) -> None:
         self.events.append(event)
@@ -173,6 +179,17 @@ class TopicCluster:
         self.key_terms = set(top_keywords([" ".join(sorted(item.signal_tokens)) for item in self.events], limit=6))
         anchor_counter = Counter(token for item in self.events for token in item.anchor_tokens)
         self.anchor_terms = {token for token, _ in anchor_counter.most_common(8)} | set(best_label_event.anchor_tokens)
+        if event.embedding:
+            if not self.centroid_embedding:
+                self.centroid_embedding = event.embedding
+                self.embedding_count = 1
+            else:
+                total = max(self.embedding_count, 1)
+                self.centroid_embedding = _normalize_embedding_vector(tuple(
+                    ((current * total) + incoming) / (total + 1)
+                    for current, incoming in zip(self.centroid_embedding, event.embedding)
+                ))
+                self.embedding_count = total + 1
         digest = hashlib.sha1(f"{self.label}|{self.sector}|{'|'.join(sorted(self.municipalities))}".encode("utf-8")).hexdigest()
         self.topic_id = digest[:12]
 
@@ -183,10 +200,16 @@ def _majority_value(values: list[str]) -> str:
     return Counter(values).most_common(1)[0][0]
 
 
+def _normalize_embedding_vector(vector: tuple[float, ...]) -> tuple[float, ...]:
+    norm = sum(value * value for value in vector) ** 0.5 or 1.0
+    return tuple(value / norm for value in vector)
+
+
 class AnalyticsService:
-    def __init__(self, region_config: dict):
+    def __init__(self, region_config: dict, embedding_service: EmbeddingService | None = None):
         self.region_config = region_config
         self.municipalities = region_config.get("municipalities", [])
+        self.embedding_service = embedding_service or EmbeddingService()
 
     def build_top_issues(
         self,
@@ -237,6 +260,91 @@ class AnalyticsService:
             region=top_issues.region,
             total_cards=top_issues.total_topics,
             items=[self._topic_to_problem_card(item) for item in top_issues.items],
+        )
+
+    def build_similar_topics(
+        self,
+        events: list[RawEvent],
+        topic_id: str | None = None,
+        query: str | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+        sector: str | None = None,
+        municipality: str | None = None,
+        source_type: str | None = None,
+        limit: int = 5,
+    ) -> SimilarTopicsResponse:
+        filtered = self._filter_events(events, start, end, sector, municipality, source_type)
+        clusters = self._build_clusters(filtered)
+        topics = [self._cluster_to_topic(cluster) for cluster in clusters]
+        topics = [topic for topic in topics if topic.issue_relevance >= 0.28]
+        cluster_lookup = {cluster.topic_id: cluster for cluster in clusters}
+        topic_lookup = {topic.topic_id: topic for topic in topics}
+
+        target_topic = topic_lookup.get(topic_id) if topic_id else None
+        target_cluster = cluster_lookup.get(topic_id) if topic_id else None
+        target_tokens = set()
+        target_embedding = None
+        target_sector = None
+        target_municipalities: set[str] = set()
+
+        if target_topic and target_cluster:
+            target_tokens = set(target_cluster.key_terms) | set(target_cluster.anchor_terms)
+            target_embedding = target_cluster.centroid_embedding
+            target_sector = target_topic.sector
+            target_municipalities = set(target_topic.municipalities)
+        elif query:
+            target_tokens = set(tokenize(query))
+            target_embedding = self.embedding_service.encode_texts([f"clustering: {query}"])[0]
+        else:
+            return SimilarTopicsResponse(
+                generated_at=datetime.now().astimezone(),
+                region=self.region_config["region_name"],
+                topic_id=topic_id,
+                query=query,
+                embedding_layer=self.embedding_service.status().as_dict(),
+                items=[],
+            )
+
+        minimum_similarity = 0.28 if query and not topic_id else 0.36
+        items: list[SimilarTopic] = []
+        for candidate in topics:
+            if topic_id and candidate.topic_id == topic_id:
+                continue
+            candidate_cluster = cluster_lookup.get(candidate.topic_id)
+            if not candidate_cluster:
+                continue
+            similarity, reasons = self._score_related_topic(
+                target_embedding=target_embedding,
+                target_tokens=target_tokens,
+                target_sector=target_sector,
+                target_municipalities=target_municipalities,
+                candidate_topic=candidate,
+                candidate_cluster=candidate_cluster,
+            )
+            if similarity < minimum_similarity:
+                continue
+            items.append(
+                SimilarTopic(
+                    topic_id=candidate.topic_id,
+                    label=candidate.label,
+                    sector=candidate.sector,
+                    municipalities=candidate.municipalities,
+                    similarity=round(similarity, 3),
+                    score=candidate.score,
+                    confidence=candidate.confidence,
+                    verification_state=candidate.verification_state,
+                    reasons=reasons,
+                )
+            )
+        items.sort(key=lambda item: (item.similarity, item.score or 0.0), reverse=True)
+        return SimilarTopicsResponse(
+            generated_at=datetime.now().astimezone(),
+            region=self.region_config["region_name"],
+            topic_id=topic_id,
+            query=query,
+            embedding_layer=self.embedding_service.status().as_dict(),
+            items=items[:limit],
         )
 
     def build_trends(
@@ -295,6 +403,7 @@ class AnalyticsService:
     def _build_clusters(self, events: list[RawEvent]) -> list[TopicCluster]:
         clusters: list[TopicCluster] = []
         enriched = [self._enrich_event(item) for item in sorted(events, key=lambda value: value.published_at)]
+        self._apply_embeddings(enriched)
         for event in enriched:
             best_cluster = None
             best_score = 0.0
@@ -324,6 +433,24 @@ class AnalyticsService:
             municipality=event.municipality or self._extract_municipality(combined_text),
             issue_score=self._score_issue_relevance(event),
         )
+
+    def _apply_embeddings(self, events: list[EnrichedEvent]) -> None:
+        if not events:
+            return
+        texts = [self._build_embedding_text(item) for item in events]
+        for event, vector in zip(events, self.embedding_service.encode_texts(texts)):
+            event.embedding = vector
+
+    @staticmethod
+    def _build_embedding_text(event: EnrichedEvent) -> str:
+        parts: list[str] = []
+        if event.raw.title:
+            parts.append(event.raw.title)
+        body = event.raw.text or ""
+        if body:
+            parts.append(shorten(body, 500))
+        combined = " ".join(part for part in parts if part)
+        return f"clustering: {combined}" if combined else ""
 
     def _extract_municipality(self, text: str) -> str:
         normalized = normalize_text(text)
@@ -389,6 +516,7 @@ class AnalyticsService:
         title_ratio: float,
         jaccard: float,
         seq_ratio: float,
+        semantic_similarity: float,
     ) -> bool:
         known_cluster_municipalities = {item for item in cluster.municipalities if item != "unknown"}
         municipality_conflict = (
@@ -404,11 +532,18 @@ class AnalyticsService:
         shared_context_match = shared_tokens >= 2 and (jaccard >= 0.16 or seq_ratio >= 0.45)
         same_sector_known = event.sector == cluster.sector and event.sector != "Прочее"
         sector_guided_match = same_sector_known and shared_tokens >= 1 and (anchor_overlap >= 1 or title_ratio >= 0.28)
+        semantic_match = semantic_similarity >= 0.76 and (
+            same_sector_known
+            or event.municipality in cluster.municipalities
+            or shared_tokens >= 1
+            or anchor_overlap >= 1
+        )
+        strong_semantic_match = semantic_similarity >= 0.84 and not municipality_conflict
 
         if cluster.sector == "Прочее" and event.sector == "Прочее":
-            return strong_anchor_match or strong_title_match or (shared_tokens >= 3 and jaccard >= 0.2)
+            return strong_anchor_match or strong_title_match or strong_semantic_match or (shared_tokens >= 3 and jaccard >= 0.2)
 
-        return strong_anchor_match or strong_title_match or shared_context_match or sector_guided_match
+        return strong_anchor_match or strong_title_match or shared_context_match or sector_guided_match or semantic_match or strong_semantic_match
 
     def _calculate_confidence(self, cluster: TopicCluster) -> float:
         if not cluster.events:
@@ -485,12 +620,14 @@ class AnalyticsService:
         title_ratio = 0.0
         if event.raw.title and representative.raw.title:
             title_ratio = SequenceMatcher(None, normalize_text(event.raw.title), normalize_text(representative.raw.title)).ratio()
-        if not self._passes_cluster_gate(event, cluster, shared_tokens, anchor_overlap, title_ratio, jaccard, seq_ratio):
+        semantic_similarity = self._semantic_similarity(event, cluster, representative)
+        if not self._passes_cluster_gate(event, cluster, shared_tokens, anchor_overlap, title_ratio, jaccard, seq_ratio, semantic_similarity):
             return 0.0
         same_sector = 0.12 if event.sector == cluster.sector else 0.0
         same_municipality = 0.12 if event.municipality in cluster.municipalities and event.municipality != "unknown" else 0.0
         shared_signal_bonus = 0.08 if shared_tokens >= 2 else 0.0
         anchor_bonus = 0.14 if anchor_overlap >= 1 and same_sector and same_municipality else 0.0
+        semantic_bonus = 0.12 if semantic_similarity >= 0.74 else 0.0
         official_update_bonus = 0.1 if (
             same_sector
             and same_municipality
@@ -507,18 +644,60 @@ class AnalyticsService:
         ) else 0.0
         return min(
             1.0,
-            0.28 * seq_ratio
-            + 0.3 * title_ratio
-            + 0.22 * jaccard
+            0.24 * seq_ratio
+            + 0.24 * title_ratio
+            + 0.18 * jaccard
+            + 0.22 * semantic_similarity
             + 0.1 * anchor_score
             + same_sector
             + same_municipality
             + shared_signal_bonus
             + anchor_bonus
+            + semantic_bonus
             + official_update_bonus
             + time_bonus
             + same_pattern_bonus
         )
+
+    def _semantic_similarity(self, event: EnrichedEvent, cluster: TopicCluster, representative: EnrichedEvent) -> float:
+        reference_embedding = cluster.centroid_embedding or representative.embedding
+        return self.embedding_service.cosine_similarity(event.embedding, reference_embedding)
+
+    def _score_related_topic(
+        self,
+        target_embedding: tuple[float, ...] | None,
+        target_tokens: set[str],
+        target_sector: str | None,
+        target_municipalities: set[str],
+        candidate_topic: TopicSummary,
+        candidate_cluster: TopicCluster,
+    ) -> tuple[float, list[str]]:
+        candidate_tokens = set(candidate_cluster.key_terms) | set(candidate_cluster.anchor_terms)
+        lexical_union = len(target_tokens | candidate_tokens) or 1
+        lexical_overlap = len(target_tokens & candidate_tokens) / lexical_union if target_tokens else 0.0
+        semantic_similarity = self.embedding_service.cosine_similarity(target_embedding, candidate_cluster.centroid_embedding)
+        municipality_overlap = (
+            len(target_municipalities & set(candidate_topic.municipalities)) / max(len(target_municipalities | set(candidate_topic.municipalities)), 1)
+            if target_municipalities
+            else 0.0
+        )
+        sector_overlap = 1.0 if target_sector and target_sector == candidate_topic.sector else 0.0
+        score = (
+            semantic_similarity * 0.65
+            + lexical_overlap * 0.2
+            + municipality_overlap * 0.1
+            + sector_overlap * 0.05
+        )
+        reasons: list[str] = []
+        if semantic_similarity >= 0.7:
+            reasons.append("похожа по смыслу и формулировкам")
+        if lexical_overlap >= 0.18:
+            reasons.append("пересекаются ключевые слова")
+        if municipality_overlap > 0:
+            reasons.append("есть совпадение по географии")
+        if sector_overlap:
+            reasons.append("совпадает сфера проблемы")
+        return score, reasons[:3]
 
     def _finalize_topics(self, clusters: list[TopicCluster]) -> list[TopicSummary]:
         topics = [self._cluster_to_topic(cluster) for cluster in clusters]

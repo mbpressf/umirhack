@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse
 
-from madrigal_assistant.models import ImportSeedResponse, IngestRequest, IngestRunResult, ProblemCardsResponse, RawEventsResponse, TopIssuesResponse, TopicSummary, TrendsResponse
+from madrigal_assistant.models import ImportSeedResponse, IngestRequest, IngestRunResult, ProblemCardsResponse, RawEventsResponse, SimilarTopicsResponse, TopIssuesResponse, TopicSummary, TrendsResponse
 from madrigal_assistant.services import RegionalPulseService
 
 
@@ -32,6 +32,7 @@ def create_app(service: RegionalPulseService | None = None) -> FastAPI:
             "sources": api_service.region_config["sources"],
             "source_catalog": api_service.get_source_catalog(),
             "source_catalog_summary": api_service.source_catalog_summary(),
+            "embedding_layer": api_service.embedding_layer_status(),
             "filters": api_service.filter_options(),
         }
 
@@ -104,6 +105,30 @@ def create_app(service: RegionalPulseService | None = None) -> FastAPI:
             end=_parse_optional_datetime(to),
             sector=sector,
             municipality=municipality,
+        )
+
+    @app.get("/api/similar-topics", response_model=SimilarTopicsResponse)
+    def similar_topics(
+        topic_id: str | None = None,
+        q: str | None = None,
+        from_: Annotated[str | None, Query(alias="from")] = None,
+        to: str | None = None,
+        sector: str | None = None,
+        municipality: str | None = None,
+        source_type: str | None = None,
+        limit: int = 5,
+    ) -> SimilarTopicsResponse:
+        if not topic_id and not q:
+            raise HTTPException(status_code=400, detail="Provide topic_id or q")
+        return api_service.get_similar_topics(
+            topic_id=topic_id,
+            query=q,
+            start=_parse_optional_datetime(from_),
+            end=_parse_optional_datetime(to),
+            sector=sector,
+            municipality=municipality,
+            source_type=source_type,
+            limit=limit,
         )
 
     @app.get("/api/raw-events", response_model=RawEventsResponse)

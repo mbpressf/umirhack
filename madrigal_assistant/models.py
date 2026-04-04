@@ -172,6 +172,27 @@ class ProblemCardsResponse(BaseModel):
     items: list[ProblemCard]
 
 
+class SimilarTopic(BaseModel):
+    topic_id: str
+    label: str
+    sector: str
+    municipalities: list[str]
+    similarity: float
+    score: float | None = None
+    confidence: float = 0.0
+    verification_state: str = "single_source"
+    reasons: list[str] = Field(default_factory=list)
+
+
+class SimilarTopicsResponse(BaseModel):
+    generated_at: datetime
+    region: str
+    topic_id: str | None = None
+    query: str | None = None
+    embedding_layer: dict[str, Any] = Field(default_factory=dict)
+    items: list[SimilarTopic]
+
+
 class TrendPoint(BaseModel):
     bucket_start: datetime
     value: int
