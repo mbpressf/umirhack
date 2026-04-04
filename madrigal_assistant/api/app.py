@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Annotated
 
@@ -19,7 +20,18 @@ def _parse_optional_datetime(value: str | None) -> datetime | None:
 
 def create_app(service: RegionalPulseService | None = None) -> FastAPI:
     api_service = service or RegionalPulseService()
-    app = FastAPI(title="Madrigal Regional Pulse API", version="0.1.0")
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        if service is None:
+            api_service.start_auto_refresh()
+        try:
+            yield
+        finally:
+            if service is None:
+                api_service.stop_auto_refresh()
+
+    app = FastAPI(title="Madrigal Regional Pulse API", version="0.1.0", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -41,12 +53,17 @@ def create_app(service: RegionalPulseService | None = None) -> FastAPI:
             "source_catalog": api_service.get_source_catalog(),
             "source_catalog_summary": api_service.source_catalog_summary(),
             "embedding_layer": api_service.embedding_layer_status(),
+            "auto_refresh": api_service.auto_refresh_status(),
             "filters": api_service.filter_options(),
         }
 
     @app.get("/api/frontend-snapshot")
     def frontend_snapshot() -> dict:
         return api_service.get_frontend_snapshot()
+
+    @app.get("/api/refresh-status")
+    def refresh_status() -> dict:
+        return api_service.auto_refresh_status()
 
     @app.get("/api/top-issues", response_model=TopIssuesResponse)
     def top_issues(
@@ -157,7 +174,7 @@ def create_app(service: RegionalPulseService | None = None) -> FastAPI:
 
     @app.post("/api/ingest/run", response_model=IngestRunResult)
     def ingest_run(request: IngestRequest) -> IngestRunResult:
-        return api_service.run_ingest(max_per_source=request.max_per_source)
+        return api_service.run_ingest(max_per_source=request.max_per_source, trigger="manual")
 
     @app.post("/api/import/seed", response_model=ImportSeedResponse)
     async def import_seed(file: UploadFile | None = File(default=None)) -> ImportSeedResponse:

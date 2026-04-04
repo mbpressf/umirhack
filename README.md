@@ -163,6 +163,25 @@ python -m venv .venv
 .venv\Scripts\uvicorn madrigal_assistant.api.app:app --reload
 ```
 
+API теперь умеет сам крутить фоновый ingest. Это значит:
+- backend раз в несколько минут сам опрашивает live-источники
+- база обновляется без ручного запуска сборки
+- фронт периодически перечитывает live snapshot и подтягивает свежие данные
+
+Управление через переменные окружения:
+
+```powershell
+$env:MADRIGAL_AUTO_REFRESH_ENABLED="1"
+$env:MADRIGAL_AUTO_REFRESH_INTERVAL_SECONDS="300"
+$env:MADRIGAL_AUTO_REFRESH_MAX_PER_SOURCE="4"
+```
+
+Проверить, жив ли авто-refresh, можно по эндпоинту:
+
+```text
+http://127.0.0.1:8000/api/refresh-status
+```
+
 Поднять dashboard:
 
 ```powershell

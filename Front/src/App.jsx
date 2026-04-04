@@ -24,6 +24,7 @@ const STORAGE = {
 };
 
 const DEFAULT_REGION = "Ростовская область";
+const LIVE_REFRESH_MS = Number(import.meta.env.VITE_AUTO_REFRESH_MS ?? 60000);
 
 const safeRead = (key, fallback) => {
   try {
@@ -143,22 +144,37 @@ export default function App() {
       return undefined;
     }
 
-    const controller = new AbortController();
+    let controller = null;
 
-    setLiveState({ loading: true, error: "" });
-    fetchFrontendSnapshot(controller.signal)
-      .then((payload) => {
+    const loadSnapshot = async ({ silent = false } = {}) => {
+      controller?.abort();
+      controller = new AbortController();
+
+      if (!silent) {
+        setLiveState((current) => ({ ...current, loading: true, error: "" }));
+      }
+
+      try {
+        const payload = await fetchFrontendSnapshot(controller.signal);
         setLiveSnapshot(payload);
         setLiveState({ loading: false, error: "" });
-      })
-      .catch((error) => {
+      } catch (error) {
         if (error.name === "AbortError") {
           return;
         }
         setLiveState({ loading: false, error: error.message });
-      });
+      }
+    };
 
-    return () => controller.abort();
+    loadSnapshot();
+    const intervalId = window.setInterval(() => {
+      loadSnapshot({ silent: true });
+    }, LIVE_REFRESH_MS);
+
+    return () => {
+      controller?.abort();
+      window.clearInterval(intervalId);
+    };
   }, [selectedRegion]);
 
   useEffect(() => {

@@ -27,6 +27,33 @@ def get_source_catalog_path() -> Path:
     return Path(os.getenv("MADRIGAL_SOURCE_CATALOG_PATH", DEFAULT_SOURCE_CATALOG_PATH))
 
 
+def _env_flag(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def get_auto_refresh_enabled() -> bool:
+    return _env_flag("MADRIGAL_AUTO_REFRESH_ENABLED", True)
+
+
+def get_auto_refresh_interval_seconds() -> int:
+    raw = os.getenv("MADRIGAL_AUTO_REFRESH_INTERVAL_SECONDS", "300")
+    try:
+        return max(30, int(raw))
+    except ValueError:
+        return 300
+
+
+def get_auto_refresh_max_per_source() -> int:
+    raw = os.getenv("MADRIGAL_AUTO_REFRESH_MAX_PER_SOURCE", "4")
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 4
+
+
 def _load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 

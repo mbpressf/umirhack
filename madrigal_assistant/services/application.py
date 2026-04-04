@@ -4,6 +4,7 @@ import csv
 import io
 import json
 import re
+import threading
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -13,7 +14,15 @@ from madrigal_assistant.analytics import AnalyticsService
 from madrigal_assistant.embeddings import EmbeddingService
 from madrigal_assistant.ingest import IngestionService
 from madrigal_assistant.models import ImportSeedResponse, IngestRunResult, ProblemCardsResponse, RawEvent, RawEventsResponse, SimilarTopicsResponse, TopIssuesResponse, TopicSummary, TrendsResponse
-from madrigal_assistant.settings import get_config_path, get_db_path, get_seed_path, load_region_config
+from madrigal_assistant.settings import (
+    get_auto_refresh_enabled,
+    get_auto_refresh_interval_seconds,
+    get_auto_refresh_max_per_source,
+    get_config_path,
+    get_db_path,
+    get_seed_path,
+    load_region_config,
+)
 from madrigal_assistant.storage import Database
 from madrigal_assistant.text import stable_event_id
 
@@ -32,6 +41,23 @@ class RegionalPulseService:
         self.ingestion = IngestionService(self.region_config)
         self.embedding_service = embedding_service or EmbeddingService()
         self.analytics = AnalyticsService(self.region_config, embedding_service=self.embedding_service)
+        self.auto_refresh_enabled = get_auto_refresh_enabled()
+        self.auto_refresh_interval_seconds = get_auto_refresh_interval_seconds()
+        self.auto_refresh_max_per_source = get_auto_refresh_max_per_source()
+        self._refresh_lock = threading.Lock()
+        self._refresh_stop_event = threading.Event()
+        self._refresh_thread: threading.Thread | None = None
+        self._refresh_state: dict[str, Any] = {
+            "enabled": self.auto_refresh_enabled,
+            "running": False,
+            "intervalSeconds": self.auto_refresh_interval_seconds,
+            "maxPerSource": self.auto_refresh_max_per_source,
+            "lastStartedAt": None,
+            "lastFinishedAt": None,
+            "nextScheduledAt": None,
+            "lastError": None,
+            "lastResult": None,
+        }
 
     def import_seed(self, upload_bytes: bytes | None = None, filename: str | None = None) -> ImportSeedResponse:
         source = filename or str(get_seed_path())
@@ -45,17 +71,47 @@ class RegionalPulseService:
         inserted, updated = self.db.upsert_events(events)
         return ImportSeedResponse(imported=inserted, updated=updated, source=filename)
 
-    def run_ingest(self, max_per_source: int = 8) -> IngestRunResult:
-        existing_ids = {event.event_id for event in self.db.fetch_events()}
-        events, stats = self.ingestion.run(max_per_source=max_per_source)
-        inserted, updated = self.db.upsert_events(events)
-        for stat in stats:
-            if stat.status != "ok":
-                continue
-            source_events = [event for event in events if event.source_id == stat.source_id]
-            stat.updated = sum(1 for event in source_events if event.event_id in existing_ids)
-            stat.inserted = len(source_events) - stat.updated
-        return IngestRunResult(inserted=inserted, updated=updated, scanned=len(events), source_stats=stats)
+    def run_ingest(self, max_per_source: int = 8, trigger: str = "manual") -> IngestRunResult:
+        with self._refresh_lock:
+            started_at = datetime.now().astimezone()
+            self._refresh_state.update(
+                {
+                    "running": True,
+                    "lastStartedAt": started_at.isoformat(),
+                    "lastError": None,
+                }
+            )
+            try:
+                existing_ids = {event.event_id for event in self.db.fetch_events()}
+                events, stats = self.ingestion.run(max_per_source=max_per_source)
+                inserted, updated = self.db.upsert_events(events)
+                for stat in stats:
+                    if stat.status != "ok":
+                        continue
+                    source_events = [event for event in events if event.source_id == stat.source_id]
+                    stat.updated = sum(1 for event in source_events if event.event_id in existing_ids)
+                    stat.inserted = len(source_events) - stat.updated
+                result = IngestRunResult(inserted=inserted, updated=updated, scanned=len(events), source_stats=stats)
+                self._refresh_state["lastResult"] = {
+                    "trigger": trigger,
+                    "inserted": result.inserted,
+                    "updated": result.updated,
+                    "scanned": result.scanned,
+                    "okSources": sum(1 for item in result.source_stats if item.status == "ok"),
+                    "failedSources": sum(1 for item in result.source_stats if item.status != "ok"),
+                }
+                return result
+            except Exception as error:
+                self._refresh_state["lastError"] = str(error)
+                raise
+            finally:
+                finished_at = datetime.now().astimezone()
+                self._refresh_state["running"] = False
+                self._refresh_state["lastFinishedAt"] = finished_at.isoformat()
+                if self.auto_refresh_enabled:
+                    self._refresh_state["nextScheduledAt"] = (
+                        finished_at + timedelta(seconds=self.auto_refresh_interval_seconds)
+                    ).isoformat()
 
     def get_top_issues(
         self,
@@ -242,6 +298,39 @@ class RegionalPulseService:
 
     def embedding_layer_status(self) -> dict[str, object]:
         return self.embedding_service.status().as_dict()
+
+    def auto_refresh_status(self) -> dict[str, Any]:
+        return dict(self._refresh_state)
+
+    def start_auto_refresh(self) -> None:
+        if not self.auto_refresh_enabled:
+            return
+        if self._refresh_thread and self._refresh_thread.is_alive():
+            return
+        self._refresh_stop_event.clear()
+        self._refresh_state["nextScheduledAt"] = datetime.now().astimezone().isoformat()
+        self._refresh_thread = threading.Thread(
+            target=self._auto_refresh_loop,
+            name="madrigal-auto-refresh",
+            daemon=True,
+        )
+        self._refresh_thread.start()
+
+    def stop_auto_refresh(self) -> None:
+        self._refresh_stop_event.set()
+        if self._refresh_thread and self._refresh_thread.is_alive():
+            self._refresh_thread.join(timeout=2.0)
+
+    def _auto_refresh_loop(self) -> None:
+        while not self._refresh_stop_event.is_set():
+            try:
+                self.run_ingest(max_per_source=self.auto_refresh_max_per_source, trigger="auto")
+            except Exception as error:
+                self._refresh_state["lastError"] = str(error)
+                next_run = datetime.now().astimezone() + timedelta(seconds=self.auto_refresh_interval_seconds)
+                self._refresh_state["nextScheduledAt"] = next_run.isoformat()
+            if self._refresh_stop_event.wait(self.auto_refresh_interval_seconds):
+                break
 
     def get_source_catalog(self) -> list[dict[str, Any]]:
         return self.region_config.get("source_catalog", [])

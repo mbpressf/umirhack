@@ -68,3 +68,17 @@ def test_api_frontend_snapshot_returns_dashboard_shape(tmp_path: Path) -> None:
         assert "whyTop" in first
         assert "sources" in first
         assert "factors" in first
+
+
+def test_api_refresh_status_returns_scheduler_metadata(tmp_path: Path) -> None:
+    service = RegionalPulseService(db_path=tmp_path / "api-refresh.db")
+    client = TestClient(create_app(service))
+
+    response = client.get("/api/refresh-status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "enabled" in payload
+    assert "intervalSeconds" in payload
+    assert "maxPerSource" in payload
+    assert "running" in payload
