@@ -1,6 +1,6 @@
 # Madrigal Regional Pulse
 
-https://bugbustersumir.mbpressf.ru/ - ссылка на готовый продукт
+[https://bugbustersumir.mbpressf.ru/](https://bugbustersumir.mbpressf.ru/) - ссылка на готовый продукт
 
 MVP для хакатонного кейса по Ростовской области.
 
