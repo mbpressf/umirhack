@@ -12,6 +12,15 @@ const MAP_DRAG_THRESHOLD = 5;
 const MAP_DRAG_SENSITIVITY = 0.92;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+const clamp01 = (value) => clamp(value, 0, 1);
+
+const getZoneHeatColor = (heat) => {
+  const normalized = clamp01(heat);
+  const hue = 214 - normalized * 206;
+  const saturation = 64;
+  const lightness = 89 - normalized * 28;
+  return `hsl(${hue.toFixed(1)} ${saturation}% ${lightness.toFixed(1)}%)`;
+};
 
 const getTransform = (focus, zoom, width, height) => {
   const centerX = width / 2;
@@ -480,8 +489,19 @@ export default function GeographyPage({
   );
 
   const regionZones = useMemo(
-    () =>
-      allCityMeta.map((zone) => {
+    () => {
+      const maxSignals = allCityMeta.reduce(
+        (max, zone) => (zone.signals > max ? zone.signals : max),
+        0,
+      );
+      const heatDivider = Math.max(1, Math.log1p(maxSignals));
+
+      return allCityMeta.map((zone) => {
+        const hasNews = Number(zone.signals) > 0;
+        const normalizedBySignals = hasNews
+          ? Math.log1p(zone.signals) / heatDivider
+          : 0;
+        const heat = hasNews ? clamp01(0.14 + normalizedBySignals * 0.86) : 0;
         const [x, y] = projectRegion(zone.center);
         return {
           ...zone,
@@ -489,8 +509,11 @@ export default function GeographyPage({
           x,
           y,
           area: estimateGeometryArea(zone.geometry),
+          heat,
+          fillColor: getZoneHeatColor(heat),
         };
-      }),
+      });
+    },
     [allCityMeta, projectRegion],
   );
 
@@ -734,6 +757,11 @@ export default function GeographyPage({
                 +
               </button>
             </div>
+            <div className="geo-heat-legend" aria-hidden="true">
+              <small>Меньше новостей</small>
+              <span className="geo-heat-bar" />
+              <small>Больше новостей</small>
+            </div>
           </div>
 
           <div className="geo-focus-banner">
@@ -796,6 +824,7 @@ export default function GeographyPage({
                       <path
                         d={zone.d}
                         className="map-zone"
+                        style={hasNews ? { fill: zone.fillColor } : undefined}
                         onClick={(event) => {
                           event.stopPropagation();
                           if (!hasNews) {
@@ -804,7 +833,11 @@ export default function GeographyPage({
                           selectZone(zone.sourceName);
                         }}
                       >
-                        <title>{hasNews ? zone.displayName : `${zone.displayName}: нет новостей`}</title>
+                        <title>
+                          {hasNews
+                            ? `${zone.displayName}: ${zone.signals} сигналов`
+                            : `${zone.displayName}: нет новостей`}
+                        </title>
                       </path>
                     </g>
                   );

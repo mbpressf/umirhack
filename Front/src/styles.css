@@ -1217,6 +1217,24 @@ th {
   line-height: 1;
 }
 
+.geo-heat-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #476383;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.geo-heat-bar {
+  width: 132px;
+  height: 8px;
+  border-radius: 999px;
+  border: 1px solid #c9d8ea;
+  background: linear-gradient(90deg, hsl(214 64% 89%) 0%, hsl(14 64% 62%) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
 .geo-map-hint {
   margin: 0;
   color: #58708d;
@@ -1347,6 +1365,7 @@ th {
   transform-origin: center;
   transition:
     transform 0.48s cubic-bezier(0.22, 1, 0.36, 1),
+    fill 0.42s ease,
     stroke 0.36s ease,
     filter 0.44s cubic-bezier(0.22, 1, 0.36, 1),
     opacity 0.3s ease;
@@ -2338,6 +2357,16 @@ th {
   border-color: #43607f;
   color: #d8e8fe;
   background: #1d2d42;
+}
+
+[data-theme="dark"] .geo-heat-legend {
+  color: #bdd2eb;
+}
+
+[data-theme="dark"] .geo-heat-bar {
+  border-color: #466180;
+  background: linear-gradient(90deg, hsl(214 43% 34%) 0%, hsl(11 53% 44%) 100%);
+  box-shadow: inset 0 1px 0 rgba(227, 239, 255, 0.08);
 }
 
 [data-theme="dark"] .geo-focus-head h3,
