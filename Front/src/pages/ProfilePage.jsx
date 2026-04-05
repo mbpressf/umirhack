@@ -3,8 +3,61 @@ import { loginUser, registerUser } from "../lib/api";
 
 const AUTH_STORAGE_KEY = "signal:auth-user";
 
+const COPY = {
+  ru: {
+    title: "Профиль и доступ",
+    signedInAs: "Вы вошли как",
+    signedOutText:
+      "Войдите или зарегистрируйтесь, чтобы сохранить историю диалогов, пользоваться AI-ассистентом и работать с персональными настройками.",
+    signIn: "Войти",
+    register: "Регистрация",
+    signOut: "Выйти",
+    registerSuccess: "Регистрация прошла успешно.",
+    loginSuccess: "Вход выполнен.",
+    logoutSuccess: "Вы вышли из профиля.",
+    authError: "Ошибка авторизации",
+    loginLabel: "Почта или телефон",
+    passwordLabel: "Пароль",
+    confirmPasswordLabel: "Подтвердите пароль",
+    modalLogin: "Вход",
+    modalRegister: "Регистрация",
+    submitting: "Отправка...",
+    featureTitle: "Что откроется после входа",
+    features: [
+      "История диалогов с AI-ассистентом",
+      "Персональные настройки интерфейса",
+      "Сохранение заметок и рабочих сценариев",
+    ],
+  },
+  en: {
+    title: "Profile and access",
+    signedInAs: "Signed in as",
+    signedOutText:
+      "Sign in or register to keep chat history, use the AI assistant, and save personal settings.",
+    signIn: "Sign in",
+    register: "Register",
+    signOut: "Sign out",
+    registerSuccess: "Registration completed.",
+    loginSuccess: "Signed in successfully.",
+    logoutSuccess: "You are signed out.",
+    authError: "Authentication error",
+    loginLabel: "Email or phone",
+    passwordLabel: "Password",
+    confirmPasswordLabel: "Confirm password",
+    modalLogin: "Sign in",
+    modalRegister: "Register",
+    submitting: "Submitting...",
+    featureTitle: "What unlocks after sign-in",
+    features: [
+      "Conversation history with the AI assistant",
+      "Personal interface settings",
+      "Saved notes and work context",
+    ],
+  },
+};
+
 export default function ProfilePage({ locale = "ru", onNotify }) {
-  const isRu = locale === "ru";
+  const copy = COPY[locale] ?? COPY.ru;
   const [authMode, setAuthMode] = useState("login");
   const [modalOpen, setModalOpen] = useState(false);
   const [user, setUser] = useState(null);
@@ -61,9 +114,9 @@ export default function ProfilePage({ locale = "ru", onNotify }) {
       setUser(response.user);
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(response.user));
       setModalOpen(false);
-      onNotify(authMode === "register" ? "Регистрация успешна." : "Вход выполнен.");
+      onNotify(authMode === "register" ? copy.registerSuccess : copy.loginSuccess);
     } catch (submitError) {
-      setError(submitError.message || "Ошибка авторизации");
+      setError(submitError.message || copy.authError);
     } finally {
       setSubmitting(false);
     }
@@ -72,50 +125,63 @@ export default function ProfilePage({ locale = "ru", onNotify }) {
   const logout = () => {
     setUser(null);
     localStorage.removeItem(AUTH_STORAGE_KEY);
-    onNotify(isRu ? "Вы вышли из профиля." : "You are signed out.");
+    onNotify(copy.logoutSuccess);
   };
 
   return (
     <div className="page">
-      <div className="card auth-card animate-in">
-        <h2>{isRu ? "Профиль" : "Profile"}</h2>
-        {user ? (
-          <>
-            <p>
-              {isRu ? "Вы вошли как" : "Signed in as"} <strong>{user.login}</strong>
-            </p>
-            <div className="problem-actions">
-              <button type="button" className="ghost-button" onClick={logout}>
-                {isRu ? "Выйти" : "Sign out"}
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <p>
-              {isRu
-                ? "Войдите или зарегистрируйтесь, чтобы сохранить персональные настройки."
-                : "Sign in or register to keep personal settings."}
-            </p>
-            <div className="problem-actions">
-              <button type="button" className="primary-button" onClick={() => openModal("login")}>
-                {isRu ? "Войти" : "Sign in"}
-              </button>
-              <button type="button" className="secondary-button" onClick={() => openModal("register")}>
-                {isRu ? "Регистрация" : "Register"}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+      <section className="card auth-card auth-card-grid animate-in">
+        <div className="auth-card-copy">
+          <span className="section-kicker">Access</span>
+          <h2>{copy.title}</h2>
+          {user ? (
+            <>
+              <p>
+                {copy.signedInAs} <strong>{user.login}</strong>
+              </p>
+              <div className="problem-actions">
+                <button type="button" className="ghost-button" onClick={logout}>
+                  {copy.signOut}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p>{copy.signedOutText}</p>
+              <div className="problem-actions">
+                <button type="button" className="primary-button" onClick={() => openModal("login")}>
+                  {copy.signIn}
+                </button>
+                <button type="button" className="secondary-button" onClick={() => openModal("register")}>
+                  {copy.register}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
 
-      {modalOpen && (
+        <div className="auth-side-panel">
+          <h3>{copy.featureTitle}</h3>
+          <ul className="chat-feature-list">
+            {copy.features.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {modalOpen ? (
         <div className="modal-overlay" onClick={closeModal}>
           <div className="modal-card auth-modal-card" onClick={(event) => event.stopPropagation()}>
-            <button type="button" className="icon-button close-button" onClick={closeModal} disabled={submitting}>
+            <button
+              type="button"
+              className="icon-button close-button"
+              onClick={closeModal}
+              disabled={submitting}
+            >
               ×
             </button>
-            <h3>{authMode === "register" ? (isRu ? "Регистрация" : "Register") : isRu ? "Вход" : "Sign in"}</h3>
+            <h3>{authMode === "register" ? copy.modalRegister : copy.modalLogin}</h3>
 
             <div className="segmented auth-mode-switch">
               <button
@@ -124,7 +190,7 @@ export default function ProfilePage({ locale = "ru", onNotify }) {
                 onClick={() => setAuthMode("login")}
                 disabled={submitting}
               >
-                {isRu ? "Вход" : "Sign in"}
+                {copy.signIn}
               </button>
               <button
                 type="button"
@@ -132,7 +198,7 @@ export default function ProfilePage({ locale = "ru", onNotify }) {
                 onClick={() => setAuthMode("register")}
                 disabled={submitting}
               >
-                {isRu ? "Регистрация" : "Register"}
+                {copy.register}
               </button>
             </div>
 
@@ -141,7 +207,7 @@ export default function ProfilePage({ locale = "ru", onNotify }) {
                 type="text"
                 value={form.login}
                 onChange={onChange("login")}
-                placeholder={isRu ? "Почта или телефон" : "Email or phone"}
+                placeholder={copy.loginLabel}
                 autoComplete="username"
                 required
               />
@@ -149,30 +215,34 @@ export default function ProfilePage({ locale = "ru", onNotify }) {
                 type="password"
                 value={form.password}
                 onChange={onChange("password")}
-                placeholder={isRu ? "Пароль" : "Password"}
+                placeholder={copy.passwordLabel}
                 autoComplete={authMode === "register" ? "new-password" : "current-password"}
                 required
               />
-              {authMode === "register" && (
+              {authMode === "register" ? (
                 <input
                   type="password"
                   value={form.passwordConfirm}
                   onChange={onChange("passwordConfirm")}
-                  placeholder={isRu ? "Подтверждение пароля" : "Confirm password"}
+                  placeholder={copy.confirmPasswordLabel}
                   autoComplete="new-password"
                   required
                 />
-              )}
-              {error && <p className="auth-error">{error}</p>}
+              ) : null}
+              {error ? <p className="auth-error">{error}</p> : null}
               <div className="auth-submit">
                 <button type="submit" className="primary-button" disabled={submitting}>
-                  {submitting ? (isRu ? "Отправка..." : "Submitting...") : authMode === "register" ? (isRu ? "Зарегистрироваться" : "Register") : isRu ? "Войти" : "Sign in"}
+                  {submitting
+                    ? copy.submitting
+                    : authMode === "register"
+                      ? copy.register
+                      : copy.signIn}
                 </button>
               </div>
             </form>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

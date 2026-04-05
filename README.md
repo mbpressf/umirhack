@@ -417,3 +417,65 @@ Manual import нужен для ситуаций, когда:
 - любой источник, который может сломать demo, лучше держать как `candidate` или `manual`
 
 Если коротко: сейчас проект уже умеет собирать и показывать сигналы региона, а следующий этап для нас это сделать аналитику сильнее и подготовить данные в максимально удобном виде для фронта и демо.
+
+## Telegram через Pyrogram
+
+В backend теперь встроен отдельный fetcher `telegram_pyrogram`.
+
+Он нужен для случаев, когда обычного парсинга `https://t.me/s/...` уже мало и нужно:
+- читать историю чатов через MTProto
+- искать сообщения по запросу внутри чата
+- снимать комментарии к постам
+- работать с Telegram-источниками, которые удобнее читать через живую сессию
+
+Ключевые файлы:
+- [D:/umirhack/madrigal_assistant/ingest/pyrogram_client.py](D:/umirhack/madrigal_assistant/ingest/pyrogram_client.py)
+- [D:/umirhack/scripts/prepare_pyrogram_session.py](D:/umirhack/scripts/prepare_pyrogram_session.py)
+- [D:/umirhack/config/telegram_pyrogram_sources.example.json](D:/umirhack/config/telegram_pyrogram_sources.example.json)
+
+Что поддерживает новый fetcher:
+- `chat_id` или username канала/чата
+- `search_query` для точечного поиска по чату
+- `message_id` для съёма конкретного поста
+- `include_comments` для сбора комментариев
+- `comment_limit` для ограничения глубины обсуждения
+
+Нужные переменные окружения:
+- `PYROGRAM_API_ID`
+- `PYROGRAM_API_HASH`
+- `PYROGRAM_SESSION_STRING` или `PYROGRAM_BOT_TOKEN`
+- опционально `PYROGRAM_SESSION_NAME`
+- опционально `PYROGRAM_WORKDIR`
+
+Подготовка сессии:
+
+```powershell
+.venv\Scripts\python scripts\prepare_pyrogram_session.py
+```
+
+Пример источника:
+
+```json
+{
+  "id": "telegram_pyrogram_rostov_region_comments",
+  "name": "Telegram / Правительство Ростовской области (comments)",
+  "kind": "official",
+  "fetcher": "telegram_pyrogram",
+  "url": "https://t.me/RostovRegion",
+  "chat_id": "@RostovRegion",
+  "message_id": 12345,
+  "include_comments": true,
+  "comment_limit": 30,
+  "enabled_in_live_config": false,
+  "requires_all_env": [
+    "PYROGRAM_API_ID",
+    "PYROGRAM_API_HASH",
+    "PYROGRAM_SESSION_STRING"
+  ]
+}
+```
+
+Важно:
+- этот контур встроен в backend, но сам по себе не запускается
+- по умолчанию ничего не ломает, если `Pyrogram` или сессия не настроены
+- включать его лучше точечно для нужных чатов и комментариев, а не для всего подряд

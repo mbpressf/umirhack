@@ -66,3 +66,65 @@ export async function loginUser(payload) {
   return data;
 }
 
+export async function fetchChatStatus(signal) {
+  const response = await fetch(buildUrl("/api/chat/status"), {
+    headers: {
+      Accept: "application/json",
+    },
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Chat status request failed with ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function fetchChatSessions(userId, signal) {
+  const response = await fetch(buildUrl(`/api/chat/sessions?user_id=${encodeURIComponent(userId)}`), {
+    headers: {
+      Accept: "application/json",
+    },
+    signal,
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.detail || "Не удалось загрузить список диалогов.");
+  }
+  return data;
+}
+
+export async function fetchChatSession(userId, sessionId, signal) {
+  const response = await fetch(buildUrl(`/api/chat/sessions/${sessionId}?user_id=${encodeURIComponent(userId)}`), {
+    headers: {
+      Accept: "application/json",
+    },
+    signal,
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.detail || "Не удалось загрузить историю диалога.");
+  }
+  return data;
+}
+
+export async function sendChatMessage(payload) {
+  const response = await fetch(buildUrl("/api/chat/ask"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.detail || "Не удалось получить ответ ассистента.");
+  }
+  return data;
+}
+

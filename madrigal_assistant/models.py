@@ -22,11 +22,18 @@ class SourceDefinition(BaseModel):
     owner_id: int | None = None
     vk_filter: str | None = None
     requires_env: str | None = None
+    requires_all_env: list[str] = Field(default_factory=list)
     status: str | None = None
     enabled_in_live_config: bool | None = None
     priority: int | None = None
     coverage: str | None = None
     tags: list[str] = Field(default_factory=list)
+    chat_id: str | int | None = None
+    search_query: str | None = None
+    message_id: int | None = None
+    include_comments: bool = False
+    comment_limit: int | None = None
+    notes: str | None = None
 
 
 class RawEvent(BaseModel):
@@ -264,3 +271,70 @@ class LoginRequest(BaseModel):
 
 class AuthResponse(BaseModel):
     user: AuthUser
+
+
+class ChatCitation(BaseModel):
+    topic_id: str | None = None
+    title: str
+    municipality: str | None = None
+    source_name: str
+    source_type: str
+    published_at: str
+    url: str
+    snippet: str
+
+
+class ChatMessage(BaseModel):
+    id: int
+    session_id: int
+    role: str
+    content: str
+    created_at: str
+    provider: str | None = None
+    citations: list[ChatCitation] = Field(default_factory=list)
+
+
+class ChatSessionSummary(BaseModel):
+    id: int
+    user_id: int
+    title: str
+    created_at: str
+    updated_at: str
+    last_message_preview: str | None = None
+
+
+class ChatStatusResponse(BaseModel):
+    provider: str
+    mode: str
+    configured: bool
+    available: bool
+    model: str | None = None
+    retrieval_enabled: bool = True
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChatSessionsResponse(BaseModel):
+    generated_at: datetime
+    items: list[ChatSessionSummary]
+    status: ChatStatusResponse
+
+
+class ChatSessionDetailResponse(BaseModel):
+    generated_at: datetime
+    session: ChatSessionSummary
+    messages: list[ChatMessage]
+    status: ChatStatusResponse
+
+
+class ChatAskRequest(BaseModel):
+    user_id: int
+    message: str
+    session_id: int | None = None
+
+
+class ChatAskResponse(BaseModel):
+    generated_at: datetime
+    session: ChatSessionSummary
+    user_message: ChatMessage
+    assistant_message: ChatMessage
+    status: ChatStatusResponse

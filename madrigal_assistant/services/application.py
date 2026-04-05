@@ -11,20 +11,39 @@ from pathlib import Path
 from typing import Any
 
 from madrigal_assistant.analytics import AnalyticsService
+from madrigal_assistant.chat import RegionalChatProvider
 from madrigal_assistant.embeddings import EmbeddingService
 from madrigal_assistant.ingest import IngestionService
-from madrigal_assistant.models import ImportSeedResponse, IngestRunResult, ProblemCardsResponse, RawEvent, RawEventsResponse, SimilarTopicsResponse, TopIssuesResponse, TopicSummary, TrendsResponse
+from madrigal_assistant.models import (
+    ChatAskResponse,
+    ChatMessage,
+    ChatSessionDetailResponse,
+    ChatSessionSummary,
+    ChatSessionsResponse,
+    ChatStatusResponse,
+    ImportSeedResponse,
+    IngestRunResult,
+    ProblemCardsResponse,
+    RawEvent,
+    RawEventsResponse,
+    SimilarTopicsResponse,
+    TopIssuesResponse,
+    TopicSummary,
+    TrendsResponse,
+)
 from madrigal_assistant.settings import (
     get_auto_refresh_enabled,
     get_auto_refresh_interval_seconds,
     get_auto_refresh_max_per_source,
+    get_chat_context_limit,
+    get_chat_history_limit,
     get_config_path,
     get_db_path,
     get_seed_path,
     load_region_config,
 )
 from madrigal_assistant.storage import Database
-from madrigal_assistant.text import stable_event_id
+from madrigal_assistant.text import shorten, stable_event_id, tokenize
 
 
 class RegionalPulseService:
@@ -41,6 +60,9 @@ class RegionalPulseService:
         self.ingestion = IngestionService(self.region_config)
         self.embedding_service = embedding_service or EmbeddingService()
         self.analytics = AnalyticsService(self.region_config, embedding_service=self.embedding_service)
+        self.chat_provider = RegionalChatProvider()
+        self.chat_context_limit = get_chat_context_limit()
+        self.chat_history_limit = get_chat_history_limit()
         self.auto_refresh_enabled = get_auto_refresh_enabled()
         self.auto_refresh_interval_seconds = get_auto_refresh_interval_seconds()
         self.auto_refresh_max_per_source = get_auto_refresh_max_per_source()
@@ -299,6 +321,100 @@ class RegionalPulseService:
     def embedding_layer_status(self) -> dict[str, object]:
         return self.embedding_service.status().as_dict()
 
+    def pyrogram_status(self) -> dict[str, object]:
+        return self.ingestion.pyrogram.status()
+
+    def chat_status(self) -> ChatStatusResponse:
+        return ChatStatusResponse(**self.chat_provider.status())
+
+    def list_chat_sessions(self, user_id: int) -> ChatSessionsResponse:
+        self._require_user(user_id)
+        items = [
+            ChatSessionSummary(**row)
+            for row in self.db.list_chat_sessions(user_id)
+        ]
+        return ChatSessionsResponse(
+            generated_at=datetime.now().astimezone(),
+            items=items,
+            status=self.chat_status(),
+        )
+
+    def get_chat_session_detail(self, user_id: int, session_id: int) -> ChatSessionDetailResponse:
+        self._require_user(user_id)
+        session = self.db.get_chat_session(session_id, user_id)
+        if not session:
+            raise ValueError("Chat session not found")
+        messages = [ChatMessage(**row) for row in self.db.list_chat_messages(session_id, user_id)]
+        return ChatSessionDetailResponse(
+            generated_at=datetime.now().astimezone(),
+            session=ChatSessionSummary(**session),
+            messages=messages,
+            status=self.chat_status(),
+        )
+
+    def ask_chat(self, user_id: int, message: str, session_id: int | None = None) -> ChatAskResponse:
+        user = self._require_user(user_id)
+        normalized_message = " ".join((message or "").split())
+        if not normalized_message:
+            raise ValueError("Message is empty")
+
+        session = self.db.get_chat_session(session_id, user_id) if session_id else None
+        if not session:
+            session = self.db.create_chat_session(
+                user_id=user_id,
+                title=self._chat_title_from_message(normalized_message),
+                provider=self.chat_status().provider,
+            )
+        if not session:
+            raise ValueError("Unable to create chat session")
+
+        user_message = self.db.create_chat_message(
+            session_id=session["id"],
+            role="user",
+            content=normalized_message,
+            provider="user",
+        )
+        if not user_message:
+            raise ValueError("Unable to save user message")
+
+        history_rows = self.db.list_chat_messages(session["id"], user_id)
+        history = [
+            {"role": row["role"], "content": row["content"]}
+            for row in history_rows[:-1]
+            if row["role"] in {"user", "assistant"}
+        ][-self.chat_history_limit :]
+        contexts = self._retrieve_chat_context(normalized_message)
+        answer = self.chat_provider.answer(
+            question=normalized_message,
+            history=history,
+            contexts=contexts,
+        )
+        assistant_message = self.db.create_chat_message(
+            session_id=session["id"],
+            role="assistant",
+            content=answer["content"],
+            provider=answer["provider"],
+            citations=self._build_chat_citations(contexts),
+        )
+        if not assistant_message:
+            raise ValueError("Unable to save assistant message")
+
+        if len([row for row in history_rows if row["role"] == "user"]) <= 1:
+            self.db.update_chat_session_title(
+                session_id=session["id"],
+                user_id=user_id,
+                title=self._chat_title_from_message(normalized_message),
+            )
+            session = self.db.get_chat_session(session["id"], user_id) or session
+
+        return ChatAskResponse(
+            generated_at=datetime.now().astimezone(),
+            session=ChatSessionSummary(**session),
+            user_message=ChatMessage(**user_message),
+            assistant_message=ChatMessage(**assistant_message),
+            status=self.chat_status(),
+        )
+
     def auto_refresh_status(self) -> dict[str, Any]:
         return dict(self._refresh_state)
 
@@ -353,35 +469,45 @@ class RegionalPulseService:
 
         latest_seen = max(event.published_at for event in all_events)
         window_24h = (latest_seen - timedelta(hours=24), latest_seen)
+        window_72h = (latest_seen - timedelta(hours=72), latest_seen)
         window_7d = (latest_seen - timedelta(days=7), latest_seen)
         window_30d = (latest_seen - timedelta(days=30), latest_seen)
+        events_24h = self._events_in_window(all_events, *window_24h)
+        events_72h = self._events_in_window(all_events, *window_72h)
+        events_7d = self._events_in_window(all_events, *window_7d)
+        events_30d = self._events_in_window(all_events, *window_30d)
 
-        topics_7d = self.get_top_issues(start=window_7d[0], end=window_7d[1], limit=24)
-        cards_7d = self.get_problem_cards(start=window_7d[0], end=window_7d[1], limit=24)
+        topics_7d = self.analytics.build_top_issues(events_7d, start=window_7d[0], end=window_7d[1], limit=24)
+        cards_7d = self.analytics.build_problem_cards(events_7d, start=window_7d[0], end=window_7d[1], limit=24)
+        topics_72h = self.analytics.build_top_issues(events_72h, start=window_72h[0], end=window_72h[1], limit=16)
+        cards_72h = self.analytics.build_problem_cards(events_72h, start=window_72h[0], end=window_72h[1], limit=16)
         topic_lookup = {item.topic.topic_id: item.topic for item in topics_7d.items}
-        topic_clusters = self.analytics.build_topic_lookup(
-            self.db.fetch_events(start=window_7d[0], end=window_7d[1]),
-            start=window_7d[0],
-            end=window_7d[1],
-        )
+        topic_clusters = self.analytics.build_topic_lookup(events_7d, start=window_7d[0], end=window_7d[1])
         topic_lookup.update(topic_clusters)
+        topic_lookup.update({item.topic.topic_id: item.topic for item in topics_72h.items})
 
-        frontend_topics = [
+        frontend_topics_week = [
             self._build_frontend_problem_entry(card, topic_lookup.get(card.topic_id))
             for card in cards_7d.items
         ]
+        frontend_topics_recent = [
+            self._build_frontend_problem_entry(card, topic_lookup.get(card.topic_id))
+            for card in cards_72h.items
+        ]
+        frontend_topics = self._rerank_frontend_topics(
+            self._merge_frontend_topics(
+                self._sort_frontend_topics(frontend_topics_recent, latest_seen),
+                self._sort_frontend_topics(frontend_topics_week, latest_seen),
+            )
+        )
         top_problems = frontend_topics[:10]
 
         municipalities = self._build_frontend_municipalities(frontend_topics)
-        sources = self._build_frontend_sources(
-            self.db.fetch_events(start=window_7d[0], end=window_7d[1]),
-            topic_lookup,
-            latest_seen,
-        )
+        sources = self._build_frontend_sources(events_7d, topic_lookup, latest_seen)
         trends = {
-            "24h": self._build_frontend_trends_window(*window_24h, bucket="4h", label="24 часа"),
-            "7d": self._build_frontend_trends_window(*window_7d, bucket="1d", label="7 дней"),
-            "30d": self._build_frontend_trends_window(*window_30d, bucket="7d", label="30 дней"),
+            "24h": self._build_frontend_trends_window(*window_24h, bucket="4h", label="24 часа", events=events_24h),
+            "7d": self._build_frontend_trends_window(*window_7d, bucket="1d", label="7 дней", events=events_7d),
+            "30d": self._build_frontend_trends_window(*window_30d, bucket="7d", label="30 дней", events=events_30d),
         }
 
         critical_signals = [
@@ -397,15 +523,16 @@ class RegionalPulseService:
         ]
         official_confirmed = sum(1 for topic in frontend_topics if topic["officialSignal"])
         top_sectors = [item["sector"] for item in trends["7d"]["sectorDynamics"][:2]]
+        day_cards = self.analytics.build_problem_cards(events_24h, start=window_24h[0], end=window_24h[1], limit=16)
         day_summary = self._build_overview_summary(
-            count=len(self.db.fetch_events(start=window_24h[0], end=window_24h[1])),
-            topics=len(self.get_problem_cards(start=window_24h[0], end=window_24h[1], limit=16).items),
+            count=len(events_24h),
+            topics=len(day_cards.items),
             top_sectors=top_sectors,
             latest_seen=latest_seen,
             period_label="24 часа",
         )
         week_summary = self._build_overview_summary(
-            count=len(self.db.fetch_events(start=window_7d[0], end=window_7d[1])),
+            count=len(events_7d),
             topics=topics_7d.total_topics,
             top_sectors=top_sectors,
             latest_seen=latest_seen,
@@ -441,6 +568,59 @@ class RegionalPulseService:
             "sources": sources,
             "reportPreview": self._build_report_preview(top_problems, week_summary),
         }
+
+    @staticmethod
+    def _events_in_window(events: list[RawEvent], start: datetime, end: datetime) -> list[RawEvent]:
+        return [event for event in events if start <= event.published_at <= end]
+
+    @staticmethod
+    def _sort_frontend_topics(topics: list[dict[str, Any]], latest_seen: datetime) -> list[dict[str, Any]]:
+        def sort_key(item: dict[str, Any]) -> tuple[float, float]:
+            updated_at = datetime.fromisoformat(item["updatedAt"])
+            age_hours = max(0.0, (latest_seen - updated_at).total_seconds() / 3600)
+            if age_hours <= 24:
+                freshness_bonus = 18.0
+            elif age_hours <= 72:
+                freshness_bonus = 12.0
+            elif age_hours <= 168:
+                freshness_bonus = 4.0
+            else:
+                freshness_bonus = 0.0
+            priority_bonus = {
+                "Критический": 6.0,
+                "Высокий": 4.0,
+                "Средний": 2.0,
+                "Наблюдение": 0.0,
+            }.get(item.get("priority"), 0.0)
+            official_bonus = 1.5 if item.get("officialSignal") else 0.0
+            return (
+                float(item.get("score", 0)) + freshness_bonus + priority_bonus + official_bonus,
+                updated_at.timestamp(),
+            )
+
+        return sorted(topics, key=sort_key, reverse=True)
+
+    @staticmethod
+    def _merge_frontend_topics(*topic_groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        merged: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        for group in topic_groups:
+            for item in group:
+                topic_id = item.get("id")
+                if not topic_id or topic_id in seen_ids:
+                    continue
+                seen_ids.add(topic_id)
+                merged.append(dict(item))
+        return merged
+
+    @staticmethod
+    def _rerank_frontend_topics(topics: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        ranked: list[dict[str, Any]] = []
+        for index, item in enumerate(topics, start=1):
+            ranked_item = dict(item)
+            ranked_item["rank"] = index
+            ranked.append(ranked_item)
+        return ranked
 
     def _empty_frontend_snapshot(self) -> dict[str, Any]:
         return {
@@ -619,8 +799,9 @@ class RegionalPulseService:
         end: datetime,
         bucket: str,
         label: str,
+        events: list[RawEvent] | None = None,
     ) -> dict[str, Any]:
-        events = self.db.fetch_events(start=start, end=end)
+        events = events if events is not None else self.db.fetch_events(start=start, end=end)
         if not events:
             return self._empty_trend_window(label, [])
 
@@ -815,6 +996,139 @@ class RegionalPulseService:
             return "Топ-проблемы ещё не сформированы."
         leaders = "; ".join(item["title"] for item in top_problems[:3])
         return f"{week_summary} Ключевые темы недели: {leaders}."
+
+    def _require_user(self, user_id: int) -> dict[str, Any]:
+        user = self.db.get_user(user_id)
+        if not user:
+            raise ValueError("User not found")
+        return user
+
+    @staticmethod
+    def _chat_title_from_message(message: str) -> str:
+        compact = " ".join((message or "").split())
+        if not compact:
+            return "Новый диалог"
+        return shorten(compact, 60)
+
+    def _retrieve_chat_context(self, message: str) -> list[dict[str, Any]]:
+        all_events = self.db.fetch_events()
+        if not all_events:
+            return []
+        latest_seen = max(event.published_at for event in all_events)
+        window_start = latest_seen - timedelta(days=14)
+        events = [event for event in all_events if event.published_at >= window_start]
+        cards = self.analytics.build_problem_cards(
+            events,
+            start=window_start,
+            end=latest_seen,
+            limit=32,
+        )
+        query_tokens = set(tokenize(message))
+        query_municipality = self.analytics._extract_municipality(message)
+        normalized_query = message.lower()
+        scored: list[tuple[float, Any]] = []
+        for card in cards.items:
+            score = self._score_chat_card(
+                card,
+                query_tokens,
+                latest_seen,
+                query_municipality=query_municipality,
+                official_required="официал" in normalized_query,
+            )
+            if score <= 0:
+                continue
+            scored.append((score, card))
+        if not scored:
+            return [self._chat_context_from_card(card) for card in cards.items[: self.chat_context_limit]]
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return [
+            self._chat_context_from_card(card)
+            for _, card in scored[: self.chat_context_limit]
+        ]
+
+    def _score_chat_card(
+        self,
+        card: Any,
+        query_tokens: set[str],
+        latest_seen: datetime,
+        *,
+        query_municipality: str | None,
+        official_required: bool,
+    ) -> float:
+        haystack = " ".join(
+            [
+                card.title,
+                card.summary,
+                card.sector,
+                card.primary_municipality,
+                " ".join(card.key_facts),
+                " ".join(item.snippet for item in card.evidence[:4]),
+            ]
+        ).lower()
+        token_hits = sum(1 for token in query_tokens if token in haystack)
+        token_ratio = token_hits / max(len(query_tokens), 1)
+        age_hours = max(0.0, (latest_seen - card.last_seen).total_seconds() / 3600)
+        freshness = 1.0 if age_hours <= 24 else 0.75 if age_hours <= 72 else 0.45 if age_hours <= 168 else 0.2
+        source_bonus = min(1.0, len(card.evidence) / 4)
+        official_bonus = 0.15 if card.latest_official_update else 0.0
+        base = (card.score or 0) / 100
+        municipality_bonus = 0.0
+        if query_municipality and query_municipality != "unknown":
+            if (card.primary_municipality or "").lower() == query_municipality.lower():
+                municipality_bonus = 0.45
+            elif query_tokens and token_hits == 0:
+                return 0.0
+        if query_tokens and token_hits == 0:
+            municipality_hit = any(token in (card.primary_municipality or "").lower() for token in query_tokens)
+            sector_hit = any(token in (card.sector or "").lower() for token in query_tokens)
+            if not municipality_hit and not sector_hit:
+                return 0.0
+        score = token_ratio * 0.5 + freshness * 0.18 + source_bonus * 0.12 + base * 0.1 + official_bonus + municipality_bonus
+        if official_required and not card.latest_official_update:
+            score *= 0.75
+        return round(score, 4)
+
+    def _chat_context_from_card(self, card: Any) -> dict[str, Any]:
+        why = "; ".join(card.why_now[:3]) if card.why_now else "Тема выделена по совокупности силы сигнала и подтверждений."
+        return {
+            "topic_id": card.topic_id,
+            "title": card.title,
+            "municipality": card.primary_municipality,
+            "sector": card.sector,
+            "summary": card.summary,
+            "why": why,
+            "last_seen": card.last_seen.isoformat(),
+            "sources": [
+                {
+                    "source_name": evidence.source_name,
+                    "source_type": evidence.source_type,
+                    "published_at": evidence.published_at.isoformat(),
+                    "url": evidence.url,
+                    "snippet": evidence.snippet,
+                }
+                for evidence in card.evidence[:3]
+            ],
+        }
+
+    @staticmethod
+    def _build_chat_citations(contexts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        citations: list[dict[str, Any]] = []
+        for context in contexts:
+            for source in context.get("sources", [])[:1]:
+                citations.append(
+                    {
+                        "topic_id": context.get("topic_id"),
+                        "title": context.get("title"),
+                        "municipality": context.get("municipality"),
+                        "source_name": source.get("source_name"),
+                        "source_type": source.get("source_type"),
+                        "published_at": source.get("published_at"),
+                        "url": source.get("url"),
+                        "snippet": source.get("snippet"),
+                    }
+                )
+                break
+        return citations
 
     def _parse_payload(self, payload: bytes, filename: str) -> list[RawEvent]:
         text_payload = self._decode_payload(payload)

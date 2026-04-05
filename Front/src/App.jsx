@@ -2,6 +2,7 @@
 import Sidebar from "./components/layout/Sidebar";
 import TopBar from "./components/layout/TopBar";
 import TopicModal from "./components/common/TopicModal";
+import ChatPage from "./pages/ChatPage";
 import OverviewPage from "./pages/OverviewPage";
 import TopProblemsPage from "./pages/TopProblemsPage";
 import TopicsPage from "./pages/TopicsPage";
@@ -36,6 +37,7 @@ const SECTION_LABELS = {
   ru: Object.fromEntries(SIDEBAR_SECTIONS.map((item) => [item.id, item.label])),
   en: {
     overview: "Overview",
+    assistant: "AI Assistant",
     top: "Top Issues",
     topics: "Topics & Events",
     trends: "Trends",
@@ -278,6 +280,14 @@ export default function App() {
             locale={locale}
           />
         );
+      case "assistant":
+        return (
+          <ChatPage
+            locale={locale}
+            onNotify={showToast}
+            onRequestLogin={() => setActiveSection("profile")}
+          />
+        );
       case "top":
         return (
           <TopProblemsPage
@@ -362,6 +372,9 @@ export default function App() {
           onToggleSidebar={() => setSidebarOpen((current) => !current)}
           currentSectionLabel={currentSectionLabel}
           locale={locale}
+          lastUpdate={data.meta.lastUpdate}
+          liveState={liveState}
+          chatStatus={metadata?.chat}
         />
         <main className="workspace-main">{renderSection()}</main>
       </div>

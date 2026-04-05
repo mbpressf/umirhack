@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from madrigal_assistant.api.app import create_app
+from madrigal_assistant.models import RawEvent
 from madrigal_assistant.services import RegionalPulseService
 
 
@@ -84,6 +85,82 @@ def test_api_refresh_status_returns_scheduler_metadata(tmp_path: Path) -> None:
     assert "running" in payload
 
 
+def test_api_metadata_includes_pyrogram_status(tmp_path: Path) -> None:
+    service = RegionalPulseService(db_path=tmp_path / "api-metadata.db")
+    client = TestClient(create_app(service))
+
+    response = client.get("/api/metadata")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "pyrogram" in payload
+    assert "installed" in payload["pyrogram"]
+    assert "api_id_configured" in payload["pyrogram"]
+    assert "chat" in payload
+    assert "provider" in payload["chat"]
+
+
+def test_api_chat_creates_session_and_returns_sources(tmp_path: Path) -> None:
+    service = RegionalPulseService(db_path=tmp_path / "api-chat.db")
+    client = TestClient(create_app(service))
+    service.import_seed()
+    user = service.db.create_user("chat-user@example.com", "hash")
+    assert user
+
+    response = client.post(
+        "/api/chat/ask",
+        json={
+            "user_id": user["id"],
+            "message": "Что происходит в Таганроге и какие темы сейчас важные?",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["session"]["id"] > 0
+    assert payload["assistant_message"]["content"]
+    assert payload["assistant_message"]["citations"]
+    assert payload["status"]["retrieval_enabled"] is True
+
+
+def test_api_chat_sessions_return_history(tmp_path: Path) -> None:
+    service = RegionalPulseService(db_path=tmp_path / "api-chat-history.db")
+    client = TestClient(create_app(service))
+    service.import_seed()
+    user = service.db.create_user("chat-history@example.com", "hash")
+    assert user
+
+    ask_response = client.post(
+        "/api/chat/ask",
+        json={
+            "user_id": user["id"],
+            "message": "Есть ли проблемы по ЖКХ за последние дни?",
+        },
+    )
+    assert ask_response.status_code == 200
+    session_id = ask_response.json()["session"]["id"]
+
+    sessions_response = client.get(f"/api/chat/sessions?user_id={user['id']}")
+    assert sessions_response.status_code == 200
+    assert sessions_response.json()["items"]
+
+    detail_response = client.get(f"/api/chat/sessions/{session_id}?user_id={user['id']}")
+    assert detail_response.status_code == 200
+    detail_payload = detail_response.json()
+    assert len(detail_payload["messages"]) >= 2
+    assert detail_payload["messages"][0]["role"] == "user"
+
+
+def test_chat_retrieval_prefers_requested_municipality(tmp_path: Path) -> None:
+    service = RegionalPulseService(db_path=tmp_path / "api-chat-retrieval.db")
+    service.import_seed()
+
+    contexts = service._retrieve_chat_context("Что сейчас происходит в Таганроге и какие темы подтверждены официально?")
+
+    assert contexts
+    assert contexts[0]["municipality"] == "Таганрог"
+
+
 def test_api_serves_built_frontend_when_dist_exists(tmp_path: Path, monkeypatch) -> None:
     frontend_dist = tmp_path / "dist"
     assets_dir = frontend_dist / "assets"
@@ -103,3 +180,47 @@ def test_api_serves_built_frontend_when_dist_exists(tmp_path: Path, monkeypatch)
     asset_response = client.get("/assets/app.js")
     assert asset_response.status_code == 200
     assert "console.log('ok')" in asset_response.text
+
+
+def test_frontend_snapshot_prioritizes_recent_topics(tmp_path: Path) -> None:
+    service = RegionalPulseService(db_path=tmp_path / "api-freshness.db")
+    latest_seen = RawEvent.model_validate(
+        {
+            "event_id": "seed-latest",
+            "url": "https://demo.local/latest",
+            "source_type": "media",
+            "source_name": "Новости",
+            "published_at": "2026-04-05T02:20:00+03:00",
+            "title": "latest",
+            "text": "latest",
+        }
+    ).published_at
+    recent_topic = {
+        "id": "topic-recent",
+        "municipality": "Азов",
+        "priority": "Высокий",
+        "score": 24,
+        "officialSignal": True,
+        "updatedAt": "2026-04-05T02:10:00+03:00",
+        "rank": 9,
+    }
+    stale_topic = {
+        "id": "topic-stale",
+        "municipality": "Ростов-на-Дону",
+        "priority": "Средний",
+        "score": 31,
+        "officialSignal": False,
+        "updatedAt": "2026-04-01T10:00:00+03:00",
+        "rank": 1,
+    }
+
+    ordered = service._rerank_frontend_topics(
+        service._merge_frontend_topics(
+            service._sort_frontend_topics([recent_topic], latest_seen),
+            service._sort_frontend_topics([stale_topic], latest_seen),
+        )
+    )
+
+    assert ordered[0]["municipality"] == "Азов"
+    assert ordered[0]["rank"] == 1
+    assert ordered[1]["municipality"] == "Ростов-на-Дону"

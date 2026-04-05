@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -27,11 +28,11 @@ from madrigal_assistant.models import (
 from madrigal_assistant.text import normalize_text, shorten, tokenize, top_keywords
 
 SECTOR_RULES = {
-    "ЖКХ": ["отоплен", "теплосет", "мусор", "контейнер", "вод", "канал", "жкх", "свет", "электр", "авар"],
-    "Дороги и транспорт": ["дорог", "автобус", "маршрут", "дтп", "пробк", "гололед", "остановк", "транспорт"],
+    "ЖКХ": ["отоплен", "теплосет", "мусор", "контейнер", "водоснаб", "водоканал", "водопровод", "кран", "жкх", "свет", "электр"],
+    "Дороги и транспорт": ["дорог", "автобус", "маршрут", "дтп", "пробк", "гололед", "остановк", "транспорт", "водител", "пешеход", "сбил", "наехал"],
     "Здравоохранение": ["поликлин", "врач", "мед", "больниц", "талон", "регистратур", "пациент"],
     "Образование": ["школ", "садик", "учител", "класс", "родител", "ремонт"],
-    "Экология и ЧС": ["пожар", "дым", "гар", "мчс", "выброс", "запах", "задымл"],
+    "Экология и ЧС": ["пожар", "дым", "гар", "мчс", "выброс", "запах", "задымл", "возгоран", "эваку", "чп", "атак", "бпла", "ракет", "дрон"],
     "Экономика и промышленность": ["зарплат", "сокращен", "предприят", "завод", "работник", "промышлен"],
     "Госуслуги и сервисы": ["мфц", "госуслуг", "электронн", "запис", "талон", "прием"],
 }
@@ -51,6 +52,7 @@ COMPLAINT_MARKERS = {"жалоб", "проблем", "очеред", "авар",
 RESOLUTION_MARKERS = {"восстанов", "устран", "нормализ", "открыли", "заверш", "опроверг", "усилили"}
 BENIGN_MARKERS = {"форум", "хакатон", "конкурс", "наград", "побед", "турнир", "праздник", "литурги", "отборочн", "встретил", "выступил", "мероприят"}
 MIN_CLUSTER_SIMILARITY = 0.47
+MIN_TOPIC_RELEVANCE = 0.32
 CLUSTER_GENERIC_TOKENS = {
     "ростов",
     "ростова",
@@ -70,6 +72,23 @@ CLUSTER_GENERIC_TOKENS = {
     "рассказали",
     "обсудили",
     "показали",
+    "человек",
+    "человека",
+    "люди",
+    "женщина",
+    "женщину",
+    "мужчина",
+    "девушка",
+    "парень",
+    "ребенок",
+    "пострадали",
+    "пострадал",
+    "погиб",
+    "погибли",
+    "сегодня",
+    "ночью",
+    "утром",
+    "вечером",
 }
 POSITIVE_SIGNAL_MARKERS = {
     "стартовал",
@@ -88,6 +107,21 @@ POSITIVE_SIGNAL_MARKERS = {
     "объективе",
     "итоги",
     "весной",
+}
+SOCIAL_NOISE_MARKERS = {
+    "подпишись",
+    "подписывайтесь",
+    "прислать новость",
+    "жиза",
+    "кулич",
+    "сладкоежки",
+    "кумира",
+    "интернет",
+    "розыгрыш",
+    "звездой",
+    "телеграм",
+    "канал",
+    "подарок",
 }
 INCIDENT_MARKERS = {
     "пострад",
@@ -134,6 +168,48 @@ ANCHOR_EXCLUDE = {
     "улице",
     "улица",
     "городе",
+    "человек",
+    "человека",
+    "люди",
+    "женщина",
+    "женщину",
+    "мужчина",
+    "девушка",
+    "парень",
+    "ребенок",
+    "пострадали",
+    "пострадал",
+    "погиб",
+    "погибли",
+    "напал",
+    "атаке",
+    "атаку",
+    "произошло",
+    "произошла",
+    "случилось",
+    "месте",
+}
+TEMPORAL_TOKENS = {
+    "утром",
+    "вечером",
+    "ночью",
+    "днем",
+    "днём",
+    "сегодня",
+    "вчера",
+    "завтра",
+    "апреля",
+    "марта",
+    "мая",
+    "июня",
+    "июля",
+    "августа",
+    "сентября",
+    "октября",
+    "ноября",
+    "декабря",
+    "января",
+    "февраля",
 }
 
 
@@ -277,7 +353,7 @@ class AnalyticsService:
         filtered = self._filter_events(events, start, end, sector, municipality, source_type)
         clusters = self._build_clusters(filtered)
         topics = [self._cluster_to_topic(cluster) for cluster in clusters]
-        topics = [topic for topic in topics if topic.issue_relevance >= 0.28]
+        topics = [topic for topic in topics if topic.issue_relevance >= MIN_TOPIC_RELEVANCE]
         cluster_lookup = {cluster.topic_id: cluster for cluster in clusters}
         topic_lookup = {topic.topic_id: topic for topic in topics}
 
@@ -403,8 +479,11 @@ class AnalyticsService:
     def _build_clusters(self, events: list[RawEvent]) -> list[TopicCluster]:
         clusters: list[TopicCluster] = []
         enriched = [self._enrich_event(item) for item in sorted(events, key=lambda value: value.published_at)]
-        self._apply_embeddings(enriched)
-        for event in enriched:
+        candidates = [event for event in enriched if self._is_cluster_candidate(event)]
+        if not candidates:
+            return []
+        self._apply_embeddings(candidates)
+        for event in candidates:
             best_cluster = None
             best_score = 0.0
             for cluster in clusters:
@@ -454,16 +533,25 @@ class AnalyticsService:
 
     def _extract_municipality(self, text: str) -> str:
         normalized = normalize_text(text)
+        best_match = "unknown"
+        best_length = 0
         for item in self.municipalities:
-            for alias in item.get("aliases", []):
-                if normalize_text(alias) in normalized:
-                    return item["name"]
-        return "unknown"
+            aliases = sorted(item.get("aliases", []), key=len, reverse=True)
+            for alias in aliases:
+                alias_normalized = normalize_text(alias).strip()
+                if not alias_normalized:
+                    continue
+                pattern = rf"(?<!\w){re.escape(alias_normalized)}(?!\w)"
+                if re.search(pattern, normalized) and len(alias_normalized) > best_length:
+                    best_match = item["name"]
+                    best_length = len(alias_normalized)
+        return best_match
 
     def _classify_sector(self, event: RawEvent) -> str:
         text = normalize_text(" ".join(part for part in [event.title or "", event.text] if part))
-        scores = {sector: sum(1 for marker in markers if marker in text) for sector, markers in SECTOR_RULES.items()}
-        best_sector = max(scores, key=scores.get)
+        tokens = tokenize(text)
+        scores = {sector: self._count_sector_hits(tokens, markers) for sector, markers in SECTOR_RULES.items()}
+        best_sector = max(scores, key=lambda sector: (scores[sector], self._sector_tiebreak_score(sector, text)))
         return best_sector if scores[best_sector] else "Прочее"
 
     def _score_issue_relevance(self, event: RawEvent) -> float:
@@ -473,6 +561,7 @@ class AnalyticsService:
         sector_hits = sum(1 for markers in SECTOR_RULES.values() for marker in markers if marker in text)
         benign_hits = sum(1 for marker in BENIGN_MARKERS if marker in text)
         positive_hits = sum(1 for marker in POSITIVE_SIGNAL_MARKERS if marker in text)
+        social_noise_hits = sum(1 for marker in SOCIAL_NOISE_MARKERS if marker in text)
         citizen_bonus = 0.15 if not event.is_official else 0.0
         raw_score = (
             problem_hits * 0.3
@@ -481,22 +570,49 @@ class AnalyticsService:
             + citizen_bonus
             - benign_hits * 0.18
             - positive_hits * (0.14 if event.is_official else 0.08)
+            - social_noise_hits * (0.16 if event.source_type == "social" else 0.08)
         )
         if event.is_official and problem_hits > 0:
             raw_score += 0.1
         if event.is_official and problem_hits == 0 and incident_hits == 0 and positive_hits >= 1:
             raw_score -= 0.2
+        if event.source_type == "social" and problem_hits == 0 and incident_hits == 0 and sector_hits == 0:
+            raw_score -= 0.22
         return max(0.0, min(1.0, raw_score * self._score_local_relevance(text)))
+
+    def _is_cluster_candidate(self, event: EnrichedEvent) -> bool:
+        text = event.normalized_text
+        problem_hits = sum(1 for marker in COMPLAINT_MARKERS if marker in text)
+        incident_hits = sum(1 for marker in INCIDENT_MARKERS if marker in text)
+        resolution_hits = sum(1 for marker in RESOLUTION_MARKERS if marker in text)
+        social_noise_hits = sum(1 for marker in SOCIAL_NOISE_MARKERS if marker in text)
+        has_known_geo = event.municipality != "unknown"
+        has_defined_sector = event.sector != "Прочее"
+
+        if social_noise_hits >= 2 and problem_hits == 0 and incident_hits == 0:
+            return False
+        if event.raw.is_official:
+            return event.issue_score >= 0.16 or problem_hits > 0 or incident_hits > 0 or resolution_hits > 0
+        if event.raw.source_type == "social" and social_noise_hits >= 1 and problem_hits == 0 and incident_hits == 0:
+            return False
+        if event.issue_score >= 0.32:
+            return True
+        if event.municipality == "unknown" and (problem_hits > 0 or incident_hits > 0) and event.issue_score >= 0.14:
+            return True
+        if (problem_hits > 0 or incident_hits > 0 or resolution_hits > 0) and event.issue_score >= 0.18:
+            return True
+        return has_defined_sector and has_known_geo and event.issue_score >= 0.2
 
     def _score_local_relevance(self, normalized_text: str) -> float:
         for item in self.municipalities:
             for alias in item.get("aliases", []):
                 alias_normalized = normalize_text(alias)
-                if alias_normalized and alias_normalized in normalized_text:
+                pattern = rf"(?<!\w){re.escape(alias_normalized)}(?!\w)"
+                if alias_normalized and re.search(pattern, normalized_text):
                     return 1.0
         if "ростовск" in normalized_text or "на дону" in normalized_text or "дон" in normalized_text:
             return 0.7
-        return 0.35
+        return 0.45
 
     def _extract_signal_tokens(self, text: str) -> set[str]:
         return {
@@ -504,6 +620,7 @@ class AnalyticsService:
             for token in tokenize(text)
             if token not in CLUSTER_GENERIC_TOKENS
             and token not in BENIGN_MARKERS
+            and token not in TEMPORAL_TOKENS
             and len(token) >= 4
         }
 
@@ -524,24 +641,47 @@ class AnalyticsService:
             and known_cluster_municipalities
             and event.municipality not in known_cluster_municipalities
         )
-        if municipality_conflict and title_ratio < 0.72 and anchor_overlap == 0:
+        cluster_issue_avg = sum(item.issue_score for item in cluster.events) / max(len(cluster.events), 1)
+        same_known_municipality = event.municipality != "unknown" and event.municipality in cluster.municipalities
+        both_unknown_geo = event.municipality == "unknown" and not known_cluster_municipalities
+        strong_anchor_pair = anchor_overlap >= 2
+        if municipality_conflict:
+            return title_ratio >= 0.88 and anchor_overlap >= 2
+        if event.issue_score < 0.28 and cluster_issue_avg >= 0.5 and title_ratio < 0.8 and anchor_overlap < 2:
             return False
 
         strong_title_match = title_ratio >= 0.72
         strong_anchor_match = anchor_overlap >= 1
         shared_context_match = shared_tokens >= 2 and (jaccard >= 0.16 or seq_ratio >= 0.45)
         same_sector_known = event.sector == cluster.sector and event.sector != "Прочее"
-        sector_guided_match = same_sector_known and shared_tokens >= 1 and (anchor_overlap >= 1 or title_ratio >= 0.28)
+        if same_sector_known and same_known_municipality and (anchor_overlap >= 1 or shared_tokens >= 2) and (title_ratio >= 0.28 or semantic_similarity >= 0.58):
+            return True
+        sector_guided_match = same_sector_known and shared_tokens >= 2 and (anchor_overlap >= 1 or title_ratio >= 0.42)
         semantic_match = semantic_similarity >= 0.76 and (
-            same_sector_known
-            or event.municipality in cluster.municipalities
-            or shared_tokens >= 1
-            or anchor_overlap >= 1
+            anchor_overlap >= 1
+            or title_ratio >= 0.42
+            or (same_sector_known and same_known_municipality and shared_tokens >= 2)
         )
-        strong_semantic_match = semantic_similarity >= 0.84 and not municipality_conflict
+        strong_semantic_match = semantic_similarity >= 0.84 and not municipality_conflict and (
+            anchor_overlap >= 1
+            or title_ratio >= 0.55
+            or (same_known_municipality and shared_tokens >= 2)
+        )
+        if same_sector_known and same_known_municipality and shared_tokens == 0 and anchor_overlap == 0 and title_ratio < 0.35:
+            return False
+        if shared_tokens == 0 and anchor_overlap == 0 and title_ratio < 0.32 and semantic_similarity < 0.9:
+            return False
 
         if cluster.sector == "Прочее" and event.sector == "Прочее":
-            return strong_anchor_match or strong_title_match or strong_semantic_match or (shared_tokens >= 3 and jaccard >= 0.2)
+            if strong_title_match:
+                return True
+            if strong_anchor_pair and (same_known_municipality or shared_tokens >= 2):
+                return True
+            if strong_semantic_match and (strong_anchor_pair or title_ratio >= 0.62 or same_known_municipality):
+                return True
+            if both_unknown_geo and strong_anchor_pair and seq_ratio >= 0.34:
+                return True
+            return shared_tokens >= 4 and jaccard >= 0.26 and anchor_overlap >= 1
 
         return strong_anchor_match or strong_title_match or shared_context_match or sector_guided_match or semantic_match or strong_semantic_match
 
@@ -699,9 +839,36 @@ class AnalyticsService:
             reasons.append("совпадает сфера проблемы")
         return score, reasons[:3]
 
+    def _topic_issue_relevance(self, cluster: TopicCluster) -> float:
+        scores = [item.issue_score for item in cluster.events]
+        if not scores:
+            return 0.0
+        top_score = max(scores)
+        average_score = sum(scores) / len(scores)
+        relevant_ratio = sum(1 for score in scores if score >= 0.35) / len(scores)
+        official_ratio = sum(1 for item in cluster.events if item.raw.is_official) / len(cluster.events)
+        source_diversity = min(1.0, len({item.raw.source_name for item in cluster.events}) / 3)
+        citizen_ratio = sum(1 for item in cluster.events if not item.raw.is_official) / len(cluster.events)
+        relevance = (
+            top_score * 0.35
+            + average_score * 0.25
+            + relevant_ratio * 0.15
+            + official_ratio * 0.05
+            + source_diversity * 0.1
+            + citizen_ratio * 0.1
+        )
+        if len(cluster.events) == 1:
+            only_event = cluster.events[0]
+            complaint_signal = any(marker in only_event.normalized_text for marker in COMPLAINT_MARKERS | INCIDENT_MARKERS)
+            if complaint_signal and top_score >= 0.2:
+                relevance = max(relevance, 0.28 + top_score * 0.5)
+        if average_score < 0.18 and relevant_ratio < 0.4:
+            relevance *= 0.6
+        return round(min(1.0, relevance), 3)
+
     def _finalize_topics(self, clusters: list[TopicCluster]) -> list[TopicSummary]:
         topics = [self._cluster_to_topic(cluster) for cluster in clusters]
-        return [topic for topic in topics if topic.issue_relevance >= 0.28]
+        return [topic for topic in topics if topic.issue_relevance >= MIN_TOPIC_RELEVANCE]
 
     def _cluster_to_topic(self, cluster: TopicCluster) -> TopicSummary:
         cluster.events.sort(key=lambda item: item.raw.published_at)
@@ -721,7 +888,7 @@ class AnalyticsService:
         ]
         bot_score = self._calculate_bot_score(cluster)
         contradiction_flag = self._detect_contradiction(cluster)
-        issue_relevance = max(item.issue_score for item in cluster.events)
+        issue_relevance = self._topic_issue_relevance(cluster)
         score_breakdown = self._calculate_score(cluster, bot_score)
         confidence = self._calculate_confidence(cluster)
         trend = self._detect_trend(cluster, score_breakdown, contradiction_flag)
@@ -901,11 +1068,46 @@ class AnalyticsService:
     def _extract_anchor_tokens(self, text: str) -> set[str]:
         anchors: set[str] = set()
         for token in tokenize(text):
-            if token in ANCHOR_EXCLUDE:
+            if token in ANCHOR_EXCLUDE or token in TEMPORAL_TOKENS:
                 continue
             if len(token) >= 5 or any(char.isdigit() for char in token):
                 anchors.add(token)
         return anchors
+
+    @staticmethod
+    def _count_sector_hits(tokens: list[str], markers: list[str]) -> int:
+        hits = 0
+        for marker in markers:
+            if marker in {"водоснаб", "водоканал", "водопровод", "кран"}:
+                if any(token.startswith(marker) for token in tokens):
+                    hits += 1
+                elif marker == "кран" and any(token in {"кран", "кранах", "крана"} for token in tokens):
+                    hits += 1
+                continue
+            if any(token.startswith(marker) for token in tokens):
+                hits += 1
+        return hits
+
+    @staticmethod
+    def _sector_tiebreak_score(sector: str, normalized_text: str) -> tuple[int, int]:
+        priority = {
+            "Экология и ЧС": 5,
+            "Дороги и транспорт": 4,
+            "Здравоохранение": 3,
+            "ЖКХ": 2,
+            "Госуслуги и сервисы": 1,
+            "Образование": 1,
+            "Экономика и промышленность": 1,
+            "Прочее": 0,
+        }
+        indicator_bonus = 0
+        if sector == "Дороги и транспорт" and any(marker in normalized_text for marker in ("дтп", "авар", "сбил", "наехал", "маршрут", "автобус")):
+            indicator_bonus = 2
+        elif sector == "Экология и ЧС" and any(marker in normalized_text for marker in ("пожар", "дым", "гар", "мчс", "чп", "атак", "бпла")):
+            indicator_bonus = 2
+        elif sector == "ЖКХ" and any(marker in normalized_text for marker in ("мусор", "контейнер", "отоплен", "теплосет", "электр", "свет", "водоснаб", "водоканал", "водопровод", "кран")):
+            indicator_bonus = 2
+        return indicator_bonus, priority.get(sector, 0)
 
     def _build_problem_timeline(self, evidence: list[TopicEvidence]) -> list[ProblemTimelineEvent]:
         timeline: list[ProblemTimelineEvent] = []

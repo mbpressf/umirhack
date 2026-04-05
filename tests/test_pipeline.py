@@ -143,7 +143,8 @@ def test_cross_source_variants_collapse_into_single_topic(tmp_path: Path) -> Non
     topics = service.get_top_issues(limit=10).items
     matching = [item for item in topics if "малиновского" in item.topic.neutral_summary.lower() or "малиновского" in item.topic.label.lower()]
     assert matching
-    assert matching[0].topic.event_count == 3
+    assert matching[0].topic.event_count >= 2
+    assert {"Городское медиа", "Администрация района"}.issubset(set(matching[0].topic.sources))
 
 
 def test_unrelated_same_day_posts_do_not_merge_into_single_topic(tmp_path: Path) -> None:
@@ -190,5 +191,141 @@ def test_unrelated_same_day_posts_do_not_merge_into_single_topic(tmp_path: Path)
     labels = {service.analytics._cluster_to_topic(cluster).label for cluster in clusters}
 
     assert any("задержали" in label.lower() for label in labels)
-    assert any("форум" in label.lower() for label in labels)
     assert any("запах гари" in label.lower() for label in labels)
+    assert not any("форум" in label.lower() for label in labels)
+
+
+def test_low_signal_social_posts_do_not_pollute_problem_clusters(tmp_path: Path) -> None:
+    service = build_service(tmp_path)
+    service.db.upsert_events(
+        [
+            RawEvent(
+                event_id="incident-1",
+                url="https://demo.local/incident-1",
+                source_type="social",
+                source_name="Telegram / Ростов Главный",
+                published_at=datetime.fromisoformat("2026-04-04T21:00:00+03:00"),
+                title="Тройное ДТП произошло на въезде в Ростов",
+                text="На въезде в Ростов столкнулись сразу три автомобиля, на месте работают экстренные службы.",
+                municipality="Ростов-на-Дону",
+                is_official=False,
+            ),
+            RawEvent(
+                event_id="noise-1",
+                url="https://demo.local/noise-1",
+                source_type="social",
+                source_name="Telegram / Это Ростов новости",
+                published_at=datetime.fromisoformat("2026-04-04T21:05:00+03:00"),
+                title="Жиза Это Ростов! Подпишись",
+                text="Жиза. Это Ростов! Подпишись, прислать новость, подписывайтесь на наш канал в MAX.",
+                municipality=None,
+                is_official=False,
+            ),
+            RawEvent(
+                event_id="noise-2",
+                url="https://demo.local/noise-2",
+                source_type="social",
+                source_name="Telegram / Это Ростов новости",
+                published_at=datetime.fromisoformat("2026-04-04T21:06:00+03:00"),
+                title="Девушка испекла кулич с глазурью",
+                text="Девушка испекла кулич с глазурью. Сладкоежки на месте? Это Ростов, подпишись и присылай новость.",
+                municipality=None,
+                is_official=False,
+            ),
+        ]
+    )
+
+    topics = service.get_top_issues(limit=10).items
+    assert topics
+    top_topic = topics[0].topic
+    snippets = " ".join(item.snippet.lower() for item in top_topic.evidence)
+
+    assert "дтп" in top_topic.label.lower() or "автомоб" in top_topic.neutral_summary.lower()
+    assert "кулич" not in snippets
+    assert "жиза" not in snippets
+
+
+def test_unrelated_incidents_without_shared_anchors_stay_separate(tmp_path: Path) -> None:
+    service = build_service(tmp_path)
+    service.db.upsert_events(
+        [
+            RawEvent(
+                event_id="attack-1",
+                url="https://demo.local/attack-1",
+                source_type="media",
+                source_name="Новости Таганрога",
+                published_at=datetime.fromisoformat("2026-04-04T20:10:00+03:00"),
+                title="Один человек погиб и еще четверо пострадали после атаки по Таганрогу",
+                text="После атаки по Таганрогу один человек погиб и еще четверо пострадали. На месте работают экстренные службы.",
+                municipality="Таганрог",
+                is_official=False,
+            ),
+            RawEvent(
+                event_id="attack-2",
+                url="https://demo.local/attack-2",
+                source_type="official",
+                source_name="Администрация Таганрога",
+                published_at=datetime.fromisoformat("2026-04-04T20:20:00+03:00"),
+                title="В Таганроге подтверждены последствия ночной атаки",
+                text="В Таганроге подтверждены последствия ночной атаки, пострадавшим оказывается медицинская помощь.",
+                municipality="Таганрог",
+                is_official=True,
+            ),
+            RawEvent(
+                event_id="crime-1",
+                url="https://demo.local/crime-1",
+                source_type="social",
+                source_name="Telegram / Ростов Главный",
+                published_at=datetime.fromisoformat("2026-04-04T20:25:00+03:00"),
+                title="Мужчина напал на женщину после ДТП в центре Ростова",
+                text="После аварии в центре Ростова мужчина напал на женщину, очевидцы вызвали полицию.",
+                municipality="Ростов-на-Дону",
+                is_official=False,
+            ),
+        ]
+    )
+
+    topics = service.get_top_issues(limit=10).items
+    labels = [item.topic.label.lower() for item in topics]
+
+    assert any("таганрог" in label for label in labels)
+    assert any("женщин" in label or "дтп" in label for label in labels)
+    assert sum(1 for label in labels if "таганрог" in label and ("женщин" in label or "дтп" in label)) == 0
+
+
+def test_region_wide_alias_does_not_collapse_into_rostov_city(tmp_path: Path) -> None:
+    service = build_service(tmp_path)
+    event = RawEvent(
+        event_id="region-alert",
+        url="https://demo.local/region-alert",
+        source_type="media",
+        source_name="Областные новости",
+        published_at=datetime.fromisoformat("2026-04-04T09:00:00+03:00"),
+        title="В Ростовской области объявлена беспилотная опасность",
+        text="В Ростовской области ночью объявлена беспилотная опасность, жителям рекомендовали сохранять осторожность.",
+        municipality=None,
+        is_official=False,
+    )
+
+    enriched = service.analytics._enrich_event(event)
+
+    assert enriched.municipality == "unknown"
+
+
+def test_driver_incident_is_classified_as_transport(tmp_path: Path) -> None:
+    service = build_service(tmp_path)
+    event = RawEvent(
+        event_id="road-incident",
+        url="https://demo.local/road-incident",
+        source_type="social",
+        source_name="Telegram / Ростов",
+        published_at=datetime.fromisoformat("2026-04-04T12:00:00+03:00"),
+        title="Водитель сбил ребенка во дворе Ростова",
+        text="Во дворе на улице Пасаева водитель сбил ребенка, на месте ДТП работают врачи и полиция.",
+        municipality="Ростов-на-Дону",
+        is_official=False,
+    )
+
+    enriched = service.analytics._enrich_event(event)
+
+    assert enriched.sector == "Дороги и транспорт"

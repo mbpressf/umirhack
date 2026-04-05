@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable
@@ -15,11 +16,22 @@ class Database:
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.path, check_same_thread=False)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA journal_mode=WAL;")
-        connection.execute("PRAGMA foreign_keys=ON;")
-        return connection
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        last_error: sqlite3.OperationalError | None = None
+        for attempt in range(3):
+            try:
+                connection = sqlite3.connect(str(self.path), timeout=30, check_same_thread=False)
+                connection.row_factory = sqlite3.Row
+                connection.execute("PRAGMA journal_mode=WAL;")
+                connection.execute("PRAGMA foreign_keys=ON;")
+                connection.execute("PRAGMA busy_timeout=30000;")
+                return connection
+            except sqlite3.OperationalError as error:
+                last_error = error
+                if "unable to open database file" not in str(error).lower() or attempt == 2:
+                    raise
+                time.sleep(0.2 * (attempt + 1))
+        raise last_error or sqlite3.OperationalError("unable to open database file")
 
     def init(self) -> None:
         with self._connect() as connection:
@@ -55,6 +67,29 @@ class Database:
                     password_hash TEXT NOT NULL,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
+                CREATE TABLE IF NOT EXISTS chat_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    title TEXT NOT NULL,
+                    provider TEXT,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id
+                    ON chat_sessions(user_id, updated_at DESC);
+                CREATE TABLE IF NOT EXISTS chat_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    provider TEXT,
+                    citations_json TEXT NOT NULL DEFAULT '[]',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id
+                    ON chat_messages(session_id, created_at ASC);
                 """
             )
 
@@ -67,6 +102,35 @@ class Database:
                 password_hash TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
+            """
+        )
+
+    def _ensure_chat_tables(self, connection: sqlite3.Connection) -> None:
+        connection.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS chat_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                provider TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id
+                ON chat_sessions(user_id, updated_at DESC);
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                provider TEXT,
+                citations_json TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id
+                ON chat_messages(session_id, created_at ASC);
             """
         )
 
@@ -220,3 +284,184 @@ class Database:
             return dict(row) if row else None
         except sqlite3.Error:
             return None
+
+    def get_user(self, user_id: int) -> dict | None:
+        try:
+            with self._connect() as connection:
+                self._ensure_users_table(connection)
+                row = connection.execute(
+                    "SELECT id, login, created_at FROM users WHERE id = ?",
+                    (user_id,),
+                ).fetchone()
+            return dict(row) if row else None
+        except sqlite3.Error:
+            return None
+
+    def create_chat_session(self, user_id: int, title: str, provider: str | None = None) -> dict | None:
+        try:
+            with self._connect() as connection:
+                self._ensure_users_table(connection)
+                self._ensure_chat_tables(connection)
+                cursor = connection.execute(
+                    """
+                    INSERT INTO chat_sessions (user_id, title, provider)
+                    VALUES (?, ?, ?)
+                    """,
+                    (user_id, title, provider),
+                )
+                session_id = cursor.lastrowid
+                row = connection.execute(
+                    """
+                    SELECT id, user_id, title, created_at, updated_at
+                    FROM chat_sessions
+                    WHERE id = ?
+                    """,
+                    (session_id,),
+                ).fetchone()
+            return dict(row) if row else None
+        except sqlite3.Error:
+            return None
+
+    def list_chat_sessions(self, user_id: int) -> list[dict]:
+        try:
+            with self._connect() as connection:
+                self._ensure_chat_tables(connection)
+                rows = connection.execute(
+                    """
+                    SELECT
+                        s.id,
+                        s.user_id,
+                        s.title,
+                        s.created_at,
+                        s.updated_at,
+                        (
+                            SELECT content
+                            FROM chat_messages AS m
+                            WHERE m.session_id = s.id
+                            ORDER BY m.id DESC
+                            LIMIT 1
+                        ) AS last_message_preview
+                    FROM chat_sessions AS s
+                    WHERE s.user_id = ?
+                    ORDER BY s.updated_at DESC, s.id DESC
+                    """,
+                    (user_id,),
+                ).fetchall()
+            return [dict(row) for row in rows]
+        except sqlite3.Error:
+            return []
+
+    def get_chat_session(self, session_id: int, user_id: int) -> dict | None:
+        try:
+            with self._connect() as connection:
+                self._ensure_chat_tables(connection)
+                row = connection.execute(
+                    """
+                    SELECT
+                        s.id,
+                        s.user_id,
+                        s.title,
+                        s.created_at,
+                        s.updated_at,
+                        (
+                            SELECT content
+                            FROM chat_messages AS m
+                            WHERE m.session_id = s.id
+                            ORDER BY m.id DESC
+                            LIMIT 1
+                        ) AS last_message_preview
+                    FROM chat_sessions AS s
+                    WHERE s.id = ? AND s.user_id = ?
+                    """,
+                    (session_id, user_id),
+                ).fetchone()
+            return dict(row) if row else None
+        except sqlite3.Error:
+            return None
+
+    def update_chat_session_title(self, session_id: int, user_id: int, title: str) -> None:
+        try:
+            with self._connect() as connection:
+                self._ensure_chat_tables(connection)
+                connection.execute(
+                    """
+                    UPDATE chat_sessions
+                    SET title = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND user_id = ?
+                    """,
+                    (title, session_id, user_id),
+                )
+        except sqlite3.Error:
+            return None
+
+    def create_chat_message(
+        self,
+        session_id: int,
+        role: str,
+        content: str,
+        citations: list[dict] | None = None,
+        provider: str | None = None,
+    ) -> dict | None:
+        try:
+            payload = json.dumps(citations or [], ensure_ascii=False)
+            with self._connect() as connection:
+                self._ensure_chat_tables(connection)
+                cursor = connection.execute(
+                    """
+                    INSERT INTO chat_messages (session_id, role, content, provider, citations_json)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (session_id, role, content, provider, payload),
+                )
+                connection.execute(
+                    """
+                    UPDATE chat_sessions
+                    SET updated_at = CURRENT_TIMESTAMP, provider = COALESCE(?, provider)
+                    WHERE id = ?
+                    """,
+                    (provider, session_id),
+                )
+                message_id = cursor.lastrowid
+                row = connection.execute(
+                    """
+                    SELECT id, session_id, role, content, provider, citations_json, created_at
+                    FROM chat_messages
+                    WHERE id = ?
+                    """,
+                    (message_id,),
+                ).fetchone()
+            if not row:
+                return None
+            record = dict(row)
+            record["citations"] = json.loads(record.pop("citations_json") or "[]")
+            return record
+        except sqlite3.Error:
+            return None
+
+    def list_chat_messages(self, session_id: int, user_id: int) -> list[dict]:
+        try:
+            with self._connect() as connection:
+                self._ensure_chat_tables(connection)
+                session = connection.execute(
+                    "SELECT id FROM chat_sessions WHERE id = ? AND user_id = ?",
+                    (session_id, user_id),
+                ).fetchone()
+                if not session:
+                    return []
+                rows = connection.execute(
+                    """
+                    SELECT id, session_id, role, content, provider, citations_json, created_at
+                    FROM chat_messages
+                    WHERE session_id = ?
+                    ORDER BY id ASC
+                    """,
+                    (session_id,),
+                ).fetchall()
+            items: list[dict] = []
+            for row in rows:
+                record = dict(row)
+                record["citations"] = json.loads(record.pop("citations_json") or "[]")
+                items.append(record)
+            return items
+        except sqlite3.Error:
+            return []

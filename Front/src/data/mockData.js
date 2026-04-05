@@ -1,5 +1,6 @@
 ﻿export const SIDEBAR_SECTIONS = [
   { id: "overview", label: "Обзор" },
+  { id: "assistant", label: "AI-ассистент" },
   { id: "top", label: "Топ проблем" },
   { id: "topics", label: "Темы и события" },
   { id: "trends", label: "Тренды" },

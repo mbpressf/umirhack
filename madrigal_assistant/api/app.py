@@ -15,6 +15,11 @@ from fastapi.staticfiles import StaticFiles
 from madrigal_assistant.models import (
     AuthResponse,
     AuthUser,
+    ChatAskRequest,
+    ChatAskResponse,
+    ChatSessionDetailResponse,
+    ChatSessionsResponse,
+    ChatStatusResponse,
     ImportSeedResponse,
     IngestRequest,
     IngestRunResult,
@@ -125,6 +130,8 @@ def create_app(service: RegionalPulseService | None = None) -> FastAPI:
             "source_catalog": api_service.get_source_catalog(),
             "source_catalog_summary": api_service.source_catalog_summary(),
             "embedding_layer": api_service.embedding_layer_status(),
+            "pyrogram": api_service.pyrogram_status(),
+            "chat": api_service.chat_status().model_dump(),
             "auto_refresh": api_service.auto_refresh_status(),
             "filters": api_service.filter_options(),
         }
@@ -136,6 +143,39 @@ def create_app(service: RegionalPulseService | None = None) -> FastAPI:
     @app.get("/api/refresh-status")
     def refresh_status() -> dict:
         return api_service.auto_refresh_status()
+
+    @app.get("/api/chat/status", response_model=ChatStatusResponse)
+    def chat_status() -> ChatStatusResponse:
+        return api_service.chat_status()
+
+    @app.get("/api/chat/sessions", response_model=ChatSessionsResponse)
+    def chat_sessions(user_id: int) -> ChatSessionsResponse:
+        try:
+            return api_service.list_chat_sessions(user_id)
+        except ValueError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+
+    @app.get("/api/chat/sessions/{session_id}", response_model=ChatSessionDetailResponse)
+    def chat_session_detail(session_id: int, user_id: int) -> ChatSessionDetailResponse:
+        try:
+            return api_service.get_chat_session_detail(user_id=user_id, session_id=session_id)
+        except ValueError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+
+    @app.post("/api/chat/ask", response_model=ChatAskResponse)
+    def chat_ask(payload: ChatAskRequest) -> ChatAskResponse:
+        try:
+            return api_service.ask_chat(
+                user_id=payload.user_id,
+                message=payload.message,
+                session_id=payload.session_id,
+            )
+        except ValueError as error:
+            detail = str(error)
+            status_code = 400
+            if detail in {"User not found", "Chat session not found"}:
+                status_code = 404
+            raise HTTPException(status_code=status_code, detail=detail) from error
 
     @app.get("/api/top-issues", response_model=TopIssuesResponse)
     def top_issues(

@@ -59,6 +59,62 @@ def get_auto_refresh_max_per_source() -> int:
         return 4
 
 
+def get_chat_provider() -> str:
+    return os.getenv("MADRIGAL_CHAT_PROVIDER", "gigachat").strip().lower()
+
+
+def get_chat_context_limit() -> int:
+    raw = os.getenv("MADRIGAL_CHAT_CONTEXT_LIMIT", "6")
+    try:
+        return max(3, min(12, int(raw)))
+    except ValueError:
+        return 6
+
+
+def get_chat_history_limit() -> int:
+    raw = os.getenv("MADRIGAL_CHAT_HISTORY_LIMIT", "8")
+    try:
+        return max(2, min(20, int(raw)))
+    except ValueError:
+        return 8
+
+
+def get_gigachat_auth_key() -> str | None:
+    return os.getenv("GIGACHAT_AUTH_KEY")
+
+
+def get_gigachat_model() -> str:
+    return os.getenv("GIGACHAT_MODEL", "GigaChat-2-Max")
+
+
+def get_gigachat_scope() -> str:
+    return os.getenv("GIGACHAT_SCOPE", "GIGACHAT_API_PERS")
+
+
+def get_gigachat_base_url() -> str:
+    return os.getenv("GIGACHAT_BASE_URL", "https://gigachat.devices.sberbank.ru/api/v1").rstrip("/")
+
+
+def get_gigachat_oauth_url() -> str:
+    return os.getenv("GIGACHAT_OAUTH_URL", "https://ngw.devices.sberbank.ru:9443/api/v2/oauth")
+
+
+def get_gigachat_timeout_seconds() -> int:
+    raw = os.getenv("GIGACHAT_TIMEOUT_SECONDS", "45")
+    try:
+        return max(10, int(raw))
+    except ValueError:
+        return 45
+
+
+def get_gigachat_ca_bundle() -> str | None:
+    return os.getenv("GIGACHAT_CA_BUNDLE") or None
+
+
+def get_gigachat_allow_insecure_ssl() -> bool:
+    return _env_flag("GIGACHAT_ALLOW_INSECURE_SSL", False)
+
+
 def _load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -87,6 +143,9 @@ def _build_live_sources(catalog_payload: dict | list) -> list[dict]:
             continue
         required_env = item.get("requires_env")
         if required_env and not os.getenv(required_env):
+            continue
+        required_envs = item.get("requires_all_env") or []
+        if required_envs and any(not os.getenv(env_name) for env_name in required_envs):
             continue
         live_sources.append(dict(item))
     return live_sources

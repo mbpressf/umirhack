@@ -1,0 +1,43 @@
+{
+  "sources": [
+    {
+      "id": "telegram_pyrogram_rostov_glavniy_history",
+      "name": "Telegram / Ростов Главный (Pyrogram)",
+      "kind": "social",
+      "fetcher": "telegram_pyrogram",
+      "url": "https://t.me/rostov_glavniy",
+      "chat_id": "@rostov_glavniy",
+      "status": "candidate",
+      "enabled_in_live_config": false,
+      "max_items": 50,
+      "requires_all_env": [
+        "PYROGRAM_API_ID",
+        "PYROGRAM_API_HASH",
+        "PYROGRAM_SESSION_STRING"
+      ],
+      "tags": ["telegram", "pyrogram", "history", "social"],
+      "notes": "Читает историю чата через MTProto и лучше подходит для приватных/ограниченных Telegram-источников."
+    },
+    {
+      "id": "telegram_pyrogram_rostov_region_comments",
+      "name": "Telegram / Правительство Ростовской области (comments)",
+      "kind": "official",
+      "fetcher": "telegram_pyrogram",
+      "url": "https://t.me/RostovRegion",
+      "chat_id": "@RostovRegion",
+      "message_id": 12345,
+      "include_comments": true,
+      "comment_limit": 30,
+      "status": "candidate",
+      "enabled_in_live_config": false,
+      "max_items": 1,
+      "requires_all_env": [
+        "PYROGRAM_API_ID",
+        "PYROGRAM_API_HASH",
+        "PYROGRAM_SESSION_STRING"
+      ],
+      "tags": ["telegram", "pyrogram", "comments", "official"],
+      "notes": "Снимает конкретный пост и его комментарии для аналитики обсуждения."
+    }
+  ]
+}

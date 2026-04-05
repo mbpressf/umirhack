@@ -2,6 +2,7 @@
 
 const ICONS = {
   overview: "M3 12h18M3 6h18M3 18h18",
+  assistant: "M5 7h14v8H8l-3 3V7z M9 11h6 M9 14h4",
   top: "M5 18h14M7 18V8m5 10V5m5 13v-7",
   topics: "M4 6h16v12H4z M8 10h8 M8 14h5",
   trends: "M4 16l5-6 4 3 7-8",

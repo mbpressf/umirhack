@@ -12,6 +12,7 @@ from xml.etree import ElementTree
 
 from bs4 import BeautifulSoup
 
+from madrigal_assistant.ingest.pyrogram_client import PyrogramCollector
 from madrigal_assistant.models import IngestSourceStat, RawEvent, SourceDefinition
 from madrigal_assistant.text import clean_public_text, first_sentence, looks_like_promotional_noise, shorten, stable_event_id, strip_html
 
@@ -93,6 +94,7 @@ class IngestionService:
     def __init__(self, region_config: dict):
         self.region_config = region_config
         self.sources = [SourceDefinition.model_validate(item) for item in region_config["sources"]]
+        self.pyrogram = PyrogramCollector(region_config["region_name"])
 
     def run(self, max_per_source: int = 8) -> tuple[list[RawEvent], list[IngestSourceStat]]:
         collected: list[RawEvent] = []
@@ -106,6 +108,8 @@ class IngestionService:
                     items = self._fetch_html(source, limit)
                 elif source.fetcher == "telegram":
                     items = self._fetch_telegram(source, limit)
+                elif source.fetcher == "telegram_pyrogram":
+                    items = self._fetch_telegram_pyrogram(source, limit)
                 elif source.fetcher == "vk_api":
                     items = self._fetch_vk_api(source, limit)
                 else:
@@ -318,6 +322,9 @@ class IngestionService:
             if len(events) >= limit:
                 break
         return events
+
+    def _fetch_telegram_pyrogram(self, source: SourceDefinition, limit: int) -> list[RawEvent]:
+        return self.pyrogram.fetch_source(source, limit)
 
     @staticmethod
     def _extract_vk_domain(url: str) -> str | None:
